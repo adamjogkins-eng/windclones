@@ -2,7 +2,7 @@ import SwiftUI
 import AVFoundation
 import WebKit
 
-// --- 1. DATA MODELS (The OS Brain) ---
+// --- 1. DATA MODELS ---
 struct UserApp: Codable, Identifiable {
     var id = UUID()
     var name: String
@@ -16,11 +16,15 @@ struct UserApp: Codable, Identifiable {
 // --- 2. MAIN SYSTEM INTERFACE ---
 struct ContentView: View {
     @State private var openedApp: String? = nil
-    @AppStorage("user_apps_v6") var savedAppsData: Data = Data()
-    @AppStorage("os_notes") var notes: String = ""
+    @AppStorage("user_apps_vFinal_Fixed") var savedAppsData: Data = Data()
+    @AppStorage("os_notes_persistent") var notes: String = ""
     
+    // FIXED: Safe decoding logic to prevent build error 65
     var userApps: [UserApp] {
-        try? JSONDecoder().decode([UserApp].self, from: savedAppsData) ?? []
+        if let decoded = try? JSONDecoder().decode([UserApp].self, from: savedAppsData) {
+            return decoded
+        }
+        return []
     }
 
     var body: some View {
@@ -45,18 +49,15 @@ struct ContentView: View {
                 // App Grid
                 ScrollView {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 25) {
-                        // Hardware & Tools
                         OSIcon(name: "Camera", icon: "camera.fill", color: .gray) { openedApp = "Camera" }
                         OSIcon(name: "Dev Studio", icon: "terminal.fill", color: .blue) { openedApp = "Dev" }
                         OSIcon(name: "Notes", icon: "note.text", color: .yellow) { openedApp = "Notes" }
                         OSIcon(name: "Music", icon: "music.note", color: .pink) { openedApp = "Music" }
                         
-                        // Games
                         OSIcon(name: "Dash", icon: "bolt.fill", color: .orange) { openedApp = "Dash" }
                         OSIcon(name: "Memory", icon: "brain.fill", color: .green) { openedApp = "Memory" }
                         OSIcon(name: "Titan", icon: "hand.tap.fill", color: .red) { openedApp = "Titan" }
                         
-                        // User-Created Apps (Loaded from Local Storage)
                         ForEach(userApps) { app in
                             OSIcon(name: app.name, icon: "app.fill", color: Color(hex: app.color)) {
                                 openedApp = "USER_\(app.id.uuidString)"
@@ -77,7 +78,7 @@ struct ContentView: View {
                 .background(.ultraThinMaterial).cornerRadius(30).padding(.bottom, 15)
             }
 
-            // WINDOW MANAGER (Handles opening every app)
+            // WINDOW MANAGER
             if let active = openedApp {
                 ZStack {
                     Color(.systemBackground).ignoresSafeArea()
@@ -88,7 +89,6 @@ struct ContentView: View {
                             Button("Exit") { withAnimation { openedApp = nil } }.bold()
                         }.padding().background(.ultraThinMaterial)
                         
-                        // App Routing Logic
                         Group {
                             if active == "Camera" { CameraView() }
                             else if active == "Dev" { DevStudioView() }
@@ -110,7 +110,7 @@ struct ContentView: View {
     }
 }
 
-// --- 3. HARDWARE ENGINES (Camera) ---
+// --- 3. HARDWARE: CAMERA ---
 struct CameraView: View {
     var body: some View {
         ZStack {
@@ -141,29 +141,30 @@ struct CameraPreview: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {}
 }
 
-// --- 4. DEV STUDIO (Code & No-Code Builder) ---
+// --- 4. DEV STUDIO (CODE & NO-CODE) ---
 struct DevStudioView: View {
-    @AppStorage("user_apps_v6") var savedAppsData: Data = Data()
+    @AppStorage("user_apps_vFinal_Fixed") var savedAppsData: Data = Data()
     @State private var mode: UserApp.AppType = .noCode
     @State private var appName = ""
-    @State private var code = "<html><body><h1>Hello</h1></body></html>"
+    @State private var code = "<html><body style='background:cyan;'><h1>New App</h1></body></html>"
     
     var body: some View {
         VStack {
             Picker("Mode", selection: $mode) {
                 Text("No-Code").tag(UserApp.AppType.noCode)
-                Text("HTML Code").tag(UserApp.AppType.code)
+                Text("Code").tag(UserApp.AppType.code)
             }.pickerStyle(.segmented).padding()
             
             Form {
                 TextField("App Name", text: $appName)
                 if mode == .code {
                     TextEditor(text: $code).font(.system(.body, design: .monospaced)).frame(height: 200)
-                } else {
-                    Text("No-Code Template: Professional Card").foregroundColor(.gray)
                 }
-                Button("Install App") {
-                    var apps = (try? JSONDecoder().decode([UserApp].self, from: savedAppsData)) ?? []
+                Button("Install to Home Screen") {
+                    var apps: [UserApp] = []
+                    if let decoded = try? JSONDecoder().decode([UserApp].self, from: savedAppsData) {
+                        apps = decoded
+                    }
                     apps.append(UserApp(name: appName, icon: "app", color: "3b82f6", type: mode, content: code))
                     if let data = try? JSONEncoder().encode(apps) { savedAppsData = data }
                     appName = ""
@@ -177,7 +178,7 @@ struct UserAppRunner: View {
     let app: UserApp
     var body: some View {
         if app.type == .code { WebView(html: app.content) }
-        else { VStack { Text(app.name).font(.largeTitle); Text("Built with No-Code") } }
+        else { VStack { Text(app.name).font(.largeTitle); Text("Template App") } }
     }
 }
 
@@ -200,10 +201,10 @@ struct MemoryGame: View {
     @State private var cards = ["💎", "💎", "👻", "👻", "🔥", "🔥"].shuffled()
     var body: some View {
         LazyVGrid(columns: [GridItem(), GridItem()]) {
-            ForEach(cards, id: \.self) { card in
+            ForEach(0..<cards.count, id: \.self) { i in
                 ZStack {
                     RoundedRectangle(cornerRadius: 10).fill(.green).frame(height: 100)
-                    Text(card).font(.largeTitle)
+                    Text(cards[i]).font(.largeTitle)
                 }
             }
         }.padding()
@@ -224,19 +225,19 @@ struct MusicView: View {
     var body: some View {
         VStack {
             Spacer()
-            Image(systemName: "music.note.list").font(.system(size: 100)).foregroundColor(.pink)
-            Text("OS Media Player").font(.headline).padding()
-            HStack(spacing: 30) {
+            Image(systemName: "music.note").font(.system(size: 80)).foregroundColor(.pink)
+            Text("Now Playing").font(.headline)
+            HStack(spacing: 40) {
                 Image(systemName: "backward.fill")
-                Image(systemName: "play.fill").font(.largeTitle)
+                Image(systemName: "play.fill")
                 Image(systemName: "forward.fill")
-            }
+            }.font(.largeTitle).padding()
             Spacer()
         }
     }
 }
 
-// --- 6. UTILITIES ---
+// --- 6. HELPERS ---
 struct OSIcon: View {
     let name: String; let icon: String; let color: Color; let action: () -> Void
     var body: some View {
@@ -246,7 +247,7 @@ struct OSIcon: View {
                     RoundedRectangle(cornerRadius: 15).fill(color.gradient).frame(width: 60, height: 60)
                     Image(systemName: icon).foregroundColor(.white).font(.title3)
                 }
-                Text(name).font(.system(size: 10)).foregroundColor(.white)
+                Text(name).font(.system(size: 10)).foregroundColor(.white).lineLimit(1)
             }
         }
     }
