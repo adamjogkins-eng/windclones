@@ -9,8 +9,6 @@ jobs:
 
       - name: Build App Binary
         run: |
-          # 1. Compile the code for iPhone (arm64)
-          # We tell it the name is WinClone based on our Package.swift
           xcodebuild build \
             -scheme "WinClone" \
             -destination 'generic/platform=iOS' \
@@ -23,20 +21,22 @@ jobs:
 
       - name: Create IPA for ESign
         run: |
-          # 2. Setup the folder structure ESign needs
           mkdir -p Payload
-          
-          # Find the compiled .app folder in the build output
-          APP_PATH=$(find ./build_output -name "*.app" -type d | head -n 1)
+          # This 'find' command looks everywhere for the .app folder
+          APP_PATH=$(find ./build_output -name "WinClone.app" -type d | head -n 1)
           
           if [ -z "$APP_PATH" ]; then
-            echo "Error: App folder not found!"
+            echo "Searching secondary location..."
+            APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "WinClone.app" -type d | head -n 1)
+          fi
+
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: App folder still not found!"
             exit 1
           fi
           
+          echo "Found app at: $APP_PATH"
           cp -R "$APP_PATH" Payload/
-          
-          # 3. Zip it into an IPA file
           zip -r WinClone.ipa Payload
 
       - name: Upload to Actions
