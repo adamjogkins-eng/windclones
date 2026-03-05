@@ -7,40 +7,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Auto-Detect Scheme and Build
+      - name: Create Fresh Project
         run: |
-          # 1. Find the project name automatically
-          PROJECT_NAME=$(ls -d *.xcodeproj | head -n 1)
+          # This command creates a brand new, clean project structure
+          # ignoring all the old broken settings
+          apple-swift-project-generator --name WindowsClone --output .
           
-          # 2. Find the first available scheme (the "build button")
-          SCHEME_NAME=$(xcodebuild -list -project "$PROJECT_NAME" -json | jq -r '.project.schemes[0]')
-          
-          echo "Building project: $PROJECT_NAME with scheme: $SCHEME_NAME"
-
-          # 3. Run the build without needing a certificate
+      - name: Build IPA
+        run: |
+          # Build using the two files we actually have
           xcodebuild build \
-            -project "$PROJECT_NAME" \
-            -scheme "$SCHEME_NAME" \
+            -scheme "WindowsClone" \
             -sdk iphoneos \
             -configuration Release \
-            -derivedDataPath ./build_output \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES
-
-      - name: Package into IPA
-        run: |
-          # Create the folder structure ESign expects
+            CODE_SIGNING_REQUIRED=NO
+          
           mkdir -p Payload
-          
-          # Find the compiled .app file and move it into Payload
-          cp -R build_output/Build/Products/Release-iphoneos/*.app Payload/
-          
-          # Zip it up and rename to .ipa
+          cp -R build/Release-iphoneos/*.app Payload/
           zip -r WindowsClone.ipa Payload
 
-      - name: Upload to GitHub Actions
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: MyUnsignedApp
