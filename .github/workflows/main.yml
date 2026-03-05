@@ -9,39 +9,46 @@ jobs:
 
       - name: Build for iOS
         run: |
-          # This command forces the use of the iPhone SDK
           xcodebuild build \
             -scheme "WinClone" \
             -destination 'generic/platform=iOS' \
             -configuration Release \
             -derivedDataPath ./build_output \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
 
-      - name: Create IPA Structure
+      - name: Create ESign IPA
         run: |
           mkdir -p Payload/WindClones.app
           
-          # Find the compiled binary - it looks for the file 'WinClone'
-          BINARY_PATH=$(find ./build_output -type f -name "WinClone" -not -path "*.framework*" | head -n 1)
-          
-          if [ -z "$BINARY_PATH" ]; then
-            echo "Searching secondary location..."
-            BINARY_PATH=$(find ./build_output -type f ! -name "*.*" -not -path "*/.*" | head -n 1)
+          # 1. Search every corner for a file that is NOT 0 bytes
+          # This looks for the largest file named 'WinClone' or 'WindClones'
+          REAL_BINARY=$(find ./build_output -type f -size +10k ! -name "*.*" | head -n 1)
+
+          if [ -z "$REAL_BINARY" ]; then
+            echo "Searching system-wide..."
+            REAL_BINARY=$(find ~/Library/Developer/Xcode/DerivedData -type f -size +10k ! -name "*.*" | head -n 1)
           fi
 
-          echo "Found binary at: $BINARY_PATH"
-          cp "$BINARY_PATH" Payload/WindClones.app/WindClones
+          if [ -z "$REAL_BINARY" ]; then
+            echo "FATAL: No real binary found above 10KB."
+            exit 1
+          fi
+
+          echo "Found real binary at: $REAL_BINARY"
+          cp "$REAL_BINARY" Payload/WindClones.app/WindClones
           
-          # Create the Info.plist
-          echo '<?xml version="1.0" encoding="UTF-8"?>
+          # 2. Re-create Info.plist
+          cat <<EOF > Payload/WindClones.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>CFBundleExecutable</key>
               <string>WindClones</string>
               <key>CFBundleIdentifier</key>
-              <string>com.yourname.windclones</string>
+              <string>com.win.clones</string>
               <key>CFBundleName</key>
               <string>WindClones</string>
               <key>CFBundlePackageType</key>
@@ -51,15 +58,16 @@ jobs:
               <key>LSRequiresIPhoneOS</key>
               <true/>
               <key>MinimumOSVersion</key>
-              <string>17.0</string>
+              <string>15.0</string>
           </dict>
-          </plist>' > Payload/WindClones.app/Info.plist
+          </plist>
+          EOF
           
           chmod +x Payload/WindClones.app/WindClones
           zip -r WindClones.ipa Payload
 
-      - name: Upload IPA
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-App
+          name: WindClones-Real-Binary
           path: WindClones.ipa
