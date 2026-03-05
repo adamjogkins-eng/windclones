@@ -7,36 +7,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build App Binary
+      - name: Build App for iOS
         run: |
-          xcodebuild build \
-            -scheme "WinClone" \
-            -destination 'generic/platform=iOS' \
-            -configuration Release \
-            -derivedDataPath ./build_output \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES
+          # Use the specific Swift Package build command
+          swift build -c release --triple arm64-apple-ios18.0-simulator
+          
+          # Create the App Bundle structure manually
+          mkdir -p Payload/WinClone.app
+          
+          # Move the compiled binary into the bundle
+          cp .build/arm64-apple-ios18.0-simulator/release/WinClone Payload/WinClone.app/WinClone
+          
+          # Create a basic Info.plist so iOS knows it's an app
+          echo '<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>WinClone</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.yourname.winclone</string>
+              <key>CFBundleName</key>
+              <string>WinClone</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>UILaunchStoryboardName</key>
+              <string>LaunchScreen</string>
+          </dict>
+          </plist>' > Payload/WinClone.app/Info.plist
 
-      - name: Create IPA for ESign
+      - name: Create IPA
         run: |
-          mkdir -p Payload
-          # This 'find' command looks everywhere for the .app folder
-          APP_PATH=$(find ./build_output -name "WinClone.app" -type d | head -n 1)
-          
-          if [ -z "$APP_PATH" ]; then
-            echo "Searching secondary location..."
-            APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "WinClone.app" -type d | head -n 1)
-          fi
-
-          if [ -z "$APP_PATH" ]; then
-            echo "Error: App folder still not found!"
-            exit 1
-          fi
-          
-          echo "Found app at: $APP_PATH"
-          cp -R "$APP_PATH" Payload/
           zip -r WinClone.ipa Payload
 
       - name: Upload to Actions
