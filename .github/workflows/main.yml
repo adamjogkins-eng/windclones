@@ -1,4 +1,4 @@
-name: Build WinClone
+name: Build WindClones
 on: [push]
 
 jobs:
@@ -7,42 +7,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build for iOS
+      - name: Force Swift Build
         run: |
-          # Use xcodebuild on the Package directly
-          xcodebuild build \
-            -scheme $(xcodebuild -list -json | jq -r '.project.schemes[0]') \
-            -destination 'generic/platform=iOS' \
-            -configuration Release \
-            -derivedDataPath ./build_output \
-            CODE_SIGNING_ALLOWED=NO
-
-      - name: Debug - List Files
-        run: find ./build_output -name "*.app" -o -type f ! -name "*.*"
-
-      - name: Create IPA Structure
-        run: |
-          mkdir -p Payload/WinClone.app
+          # 1. Build the binary for iPhone
+          swift build -c release --triple arm64-apple-ios17.0-simulator
           
-          # Find any executable file in the build folder
-          BINARY_PATH=$(find ./build_output/Build/Products/Release-iphoneos -type f -maxdepth 2 ! -name "*.*" | head -n 1)
+          # 2. Create the App Folder
+          mkdir -p Payload/WindClones.app
           
-          if [ -z "$BINARY_PATH" ]; then
-             # Backup search
-             BINARY_PATH=$(find ./build_output -type f ! -name "*.*" -not -path "*/.*" | head -n 1)
-          fi
+          # 3. Find the file and move it
+          # We look in the .build folder which is where forks store compiled data
+          find .build -type f -name "WinClone" -exec cp {} Payload/WindClones.app/WindClones \;
+          
+          # 4. Create the Info.plist (The App's "ID Card")
+          echo '<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>WindClones</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.yourname.windclones</string>
+              <key>CFBundleName</key>
+              <string>WindClones</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>MinimumOSVersion</key>
+              <string>17.0</string>
+          </dict>
+          </plist>' > Payload/WindClones.app/Info.plist
+          
+          # 5. Make it a real app and zip it
+          chmod +x Payload/WindClones.app/WindClones
+          zip -r WindClones.ipa Payload
 
-          echo "Found binary at: $BINARY_PATH"
-          cp "$BINARY_PATH" Payload/WinClone.app/WinClone
-          
-          # Basic Info.plist
-          echo '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleExecutable</key><string>WinClone</string><key>CFBundleIdentifier</key><string>com.clone.win</string><key>CFBundleName</key><string>WinClone</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>1.0</string><key>LSRequiresIPhoneOS</key><true/><key>MinimumOSVersion</key><string>17.0</string></dict></plist>' > Payload/WinClone.app/Info.plist
-          
-          chmod +x Payload/WinClone.app/WinClone
-          zip -r WinClone.ipa Payload
-
-      - name: Upload
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: MyWindowsApp
-          path: WinClone.ipa
+          name: WindClones-App
+          path: WindClones.ipa
