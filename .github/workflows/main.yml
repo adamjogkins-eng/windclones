@@ -1,4 +1,4 @@
-name: Build Windows Clone
+name: Build WinClone
 on: [push]
 
 jobs:
@@ -7,12 +7,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve Swift Package
-        run: swift package resolve
-
-      - name: Build Unsigned IPA
+      - name: Build App Binary
         run: |
-          # 1. Compile the app for iPhone hardware (arm64)
+          # 1. Compile the code for iPhone (arm64)
+          # We tell it the name is WinClone based on our Package.swift
           xcodebuild build \
             -scheme "WinClone" \
             -destination 'generic/platform=iOS' \
@@ -23,17 +21,26 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES
 
-          # 2. Create the IPA structure for ESign
+      - name: Create IPA for ESign
+        run: |
+          # 2. Setup the folder structure ESign needs
           mkdir -p Payload
-          # This finds the actual .app folder created by the build
+          
+          # Find the compiled .app folder in the build output
           APP_PATH=$(find ./build_output -name "*.app" -type d | head -n 1)
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: App folder not found!"
+            exit 1
+          fi
+          
           cp -R "$APP_PATH" Payload/
           
-          # 3. Zip it up
-          zip -r WindowsClone.ipa Payload
+          # 3. Zip it into an IPA file
+          zip -r WinClone.ipa Payload
 
-      - name: Upload Artifact
+      - name: Upload to Actions
         uses: actions/upload-artifact@v4
         with:
-          name: WindowsClone-IPA
-          path: WindowsClone.ipa
+          name: MyWindowsApp
+          path: WinClone.ipa
