@@ -1,102 +1,98 @@
 import SwiftUI
 
 struct ContentView: View {
-    @Bindable var state: PresentationState
-    @State private var selection: UUID?
+    @State private var openNotepad = false
+    @State private var notepadText = "Hello from your Windows Clone!"
+    @State private var notepadOffset = CGSize(width: 20, height: 50)
+    @State private var showStartMenu = false
 
     var body: some View {
-        NavigationSplitView {
-            VStack(spacing: 0) {
-                List(selection: $selection) {
-                    ForEach(Array(state.slides.enumerated()), id: \.element.id) { index, slide in
-                        HStack {
-                            Text("\(index + 1).")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 24, alignment: .trailing)
-                                .draggable(slide.id.uuidString)
-                            TextField("URL", text: Binding(
-                                get: { slide.url },
-                                set: { slide.url = $0; state.saveToDisk() }
-                            ))
-                            .textFieldStyle(.roundedBorder)
-                        }
-                        .tag(slide.id)
-                        .dropDestination(for: String.self) { items, _ in
-                            guard let draggedIDString = items.first,
-                                  let draggedID = UUID(uuidString: draggedIDString),
-                                  let fromIndex = state.slides.firstIndex(where: { $0.id == draggedID }),
-                                  let toIndex = state.slides.firstIndex(where: { $0.id == slide.id })
-                            else { return false }
-                            withAnimation {
-                                state.slides.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
-                            }
-                            return true
-                        }
-                    }
-                }
-                .listStyle(.sidebar)
-                .onChange(of: selection) { _, newValue in
-                    if let newValue, let index = state.slides.firstIndex(where: { $0.id == newValue }) {
-                        state.currentIndex = index
-                    }
-                }
+        ZStack {
+            // 1. THE DESKTOP (Classic Teal)
+            Color(red: 0.0, green: 0.5, blue: 0.5).edgesIgnoringSafeArea(.all)
 
+            // 2. DESKTOP ICONS
+            VStack {
+                DesktopIcon(name: "Notepad", icon: "doc.text.fill") {
+                    openNotepad = true
+                }
+                DesktopIcon(name: "My Computer", icon: "desktopcomputer") { }
+                Spacer()
+            }
+            .padding(.top, 50)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // 3. THE NOTEPAD WINDOW (Only shows if openNotepad is true)
+            if openNotepad {
+                VStack(spacing: 0) {
+                    // Title Bar
+                    HStack {
+                        Text("Notepad").font(.caption).foregroundColor(.white).padding(.leading, 10)
+                        Spacer()
+                        Button(action: { openNotepad = false }) {
+                            Image(systemName: "xmark.square.fill").foregroundColor(.white)
+                        }.padding(.trailing, 10)
+                    }
+                    .frame(height: 30).background(Color.blue)
+
+                    // Text Area
+                    TextEditor(text: $notepadText)
+                        .font(.custom("Courier", size: 14))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(width: 300, height: 350)
+                .background(Color.white)
+                .border(Color.black, width: 1)
+                .offset(notepadOffset)
+                .gesture(DragGesture().onChanged { value in
+                    self.notepadOffset = CGSize(width: value.location.x - 150, height: value.location.y - 20)
+                })
+            }
+
+            // 4. THE TASKBAR & START MENU
+            VStack {
+                Spacer()
+                if showStartMenu {
+                    StartMenu()
+                }
                 HStack {
-                    Button(action: addSlide) {
-                        Image(systemName: "plus")
+                    Button(action: { showStartMenu.toggle() }) {
+                        HStack {
+                            Image(systemName: "logo.xbox").resizable().frame(width: 15, height: 15)
+                            Text("Start").bold()
+                        }
+                        .padding(5).background(Color.gray).border(Color.white, width: 2)
                     }
-                    Button(action: deleteSelected) {
-                        Image(systemName: "minus")
-                    }
-                    .disabled(selection == nil)
                     Spacer()
                 }
-                .padding(8)
-            }
-            .navigationSplitViewColumnWidth(min: 150, ideal: 250, max: 500)
-        } detail: {
-            if let slide = state.currentSlide {
-                WebView(url: slide.url, pageZoom: state.zoomLevel)
-            } else {
-                VStack {
-                    Text("No slide selected")
-                        .foregroundStyle(.secondary)
-                    Text("Add a URL to get started")
-                        .foregroundStyle(.tertiary)
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .onAppear {
-            if state.slides.isEmpty {
-                addSlide()
-            }
-            if let first = state.slides.first {
-                selection = first.id
+                .padding(5).background(Color(white: 0.8))
             }
         }
     }
+}
 
-    private func addSlide() {
-        let slide = Slide()
-        state.slides.append(slide)
-        selection = slide.id
-        state.currentIndex = state.slides.count - 1
-    }
-
-    private func deleteSelected() {
-        guard let selection else { return }
-        if let index = state.slides.firstIndex(where: { $0.id == selection }) {
-            state.slides.remove(at: index)
-            if state.slides.isEmpty {
-                self.selection = nil
-                state.currentIndex = 0
-            } else {
-                let newIndex = min(index, state.slides.count - 1)
-                state.currentIndex = newIndex
-                self.selection = state.slides[newIndex].id
+// Support components
+struct DesktopIcon: View {
+    let name: String
+    let icon: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            VStack {
+                Image(systemName: icon).font(.largeTitle).foregroundColor(.white)
+                Text(name).font(.caption).foregroundColor(.white)
             }
+        }.padding(20)
+    }
+}
+
+struct StartMenu: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Programs").padding().frame(width: 150, alignment: .leading).border(Color.white)
+            Text("Settings").padding().frame(width: 150, alignment: .leading).border(Color.white)
+            Text("Shutdown").padding().frame(width: 150, alignment: .leading).border(Color.white)
         }
+        .background(Color.gray).border(Color.black).padding(.leading, 5)
     }
 }
