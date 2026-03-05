@@ -1,5 +1,8 @@
 name: Build WindClones
-on: [push]
+on: 
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: # This adds a manual "Run" button
 
 jobs:
   build:
@@ -9,8 +12,7 @@ jobs:
 
       - name: Build for iOS
         run: |
-          # This forces Xcode to use the real iOS SDK which contains the Standard Library
-          xcodebuild build \
+          xcodebuild clean build \
             -scheme "WinClone" \
             -destination 'generic/platform=iOS' \
             -configuration Release \
@@ -22,30 +24,20 @@ jobs:
         run: |
           mkdir -p Payload/WindClones.app
           
-          # Hunt for the compiled executable (should be several hundred KB now)
-          REAL_BINARY=$(find ./build_output -type f -perm +111 ! -name "*.*" -size +50k | head -n 1)
+          # Find the app folder
+          APP_PATH=$(find ./build_output -name "*.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then echo "No .app found"; exit 1; fi
           
-          if [ -z "$REAL_BINARY" ]; then
-            echo "Searching without size filter..."
-            REAL_BINARY=$(find ./build_output -type f -perm +111 ! -name "*.*" | head -n 1)
-          fi
-
-          if [ -z "$REAL_BINARY" ]; then
-            echo "FATAL: No binary found. Check if the build actually succeeded."
-            exit 1
-          fi
-
-          echo "Found binary at: $REAL_BINARY"
-          cp "$REAL_BINARY" Payload/WindClones.app/WindClones
+          cp -R "$APP_PATH/" Payload/WindClones.app/
           
-          # Info.plist
+          # Force the Info.plist with all hardware keys
           cat <<EOF > Payload/WindClones.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>CFBundleExecutable</key>
-              <string>WindClones</string>
+              <string>WinClone</string>
               <key>CFBundleIdentifier</key>
               <string>com.win.clones</string>
               <key>CFBundleName</key>
@@ -53,22 +45,24 @@ jobs:
               <key>CFBundlePackageType</key>
               <string>APPL</string>
               <key>CFBundleShortVersionString</key>
-              <string>1.0</string>
+              <string>3.0</string>
+              <key>NSCameraUsageDescription</key>
+              <string>Used for OS Camera</string>
+              <key>NSMicrophoneUsageDescription</key>
+              <string>Used for OS Audio</string>
               <key>LSRequiresIPhoneOS</key>
               <true/>
               <key>MinimumOSVersion</key>
               <string>15.0</string>
-              <key>CFBundleSupportedPlatforms</key>
-              <array><string>iPhoneOS</string></array>
           </dict>
           </plist>
           EOF
           
-          chmod +x Payload/WindClones.app/WindClones
           zip -r WindClones.ipa Payload
 
-      - name: Upload
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-Final
+          name: WindClones-Full-OS
           path: WindClones.ipa
+          if-no-files-found: error
