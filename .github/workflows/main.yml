@@ -9,57 +9,34 @@ jobs:
 
       - name: Build for iOS
         run: |
+          # Use xcodebuild on the Package directly
           xcodebuild build \
-            -scheme "WinClone" \
+            -scheme $(xcodebuild -list -json | jq -r '.project.schemes[0]') \
             -destination 'generic/platform=iOS' \
             -configuration Release \
             -derivedDataPath ./build_output \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Debug - List Files
+        run: find ./build_output -name "*.app" -o -type f ! -name "*.*"
 
       - name: Create IPA Structure
         run: |
           mkdir -p Payload/WinClone.app
           
-          # This command searches the build folder for the executable file named 'WinClone'
-          BINARY_PATH=$(find ./build_output -type f -name "WinClone" -not -path "*.framework*" -not -path "*.xctest*" | head -n 1)
+          # Find any executable file in the build folder
+          BINARY_PATH=$(find ./build_output/Build/Products/Release-iphoneos -type f -maxdepth 2 ! -name "*.*" | head -n 1)
           
           if [ -z "$BINARY_PATH" ]; then
-            echo "Error: Binary not found in build_output. Searching everything..."
-            BINARY_PATH=$(find . -type f -name "WinClone" -not -path "./.git*" | head -n 1)
-          fi
-
-          if [ -z "$BINARY_PATH" ]; then
-            echo "FATAL ERROR: Could not find the WinClone file anywhere."
-            exit 1
+             # Backup search
+             BINARY_PATH=$(find ./build_output -type f ! -name "*.*" -not -path "*/.*" | head -n 1)
           fi
 
           echo "Found binary at: $BINARY_PATH"
           cp "$BINARY_PATH" Payload/WinClone.app/WinClone
           
-          # Create the Info.plist
-          echo '<?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>WinClone</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.yourname.winclone</string>
-              <key>CFBundleName</key>
-              <string>WinClone</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>1.0</string>
-              <key>LSRequiresIPhoneOS</key>
-              <true/>
-              <key>MinimumOSVersion</key>
-              <string>17.0</string>
-              <key>UILaunchStoryboardName</key>
-              <string>LaunchScreen</string>
-          </dict>
-          </plist>' > Payload/WinClone.app/Info.plist
+          # Basic Info.plist
+          echo '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleExecutable</key><string>WinClone</string><key>CFBundleIdentifier</key><string>com.clone.win</string><key>CFBundleName</key><string>WinClone</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>1.0</string><key>LSRequiresIPhoneOS</key><true/><key>MinimumOSVersion</key><string>17.0</string></dict></plist>' > Payload/WinClone.app/Info.plist
           
           chmod +x Payload/WinClone.app/WinClone
           zip -r WinClone.ipa Payload
