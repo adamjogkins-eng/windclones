@@ -7,19 +7,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Force Swift Build
+      - name: Build for iOS
         run: |
-          # 1. Build the binary for iPhone
-          swift build -c release --triple arm64-apple-ios17.0-simulator
-          
-          # 2. Create the App Folder
+          # This command forces the use of the iPhone SDK
+          xcodebuild build \
+            -scheme "WinClone" \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            -derivedDataPath ./build_output \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Create IPA Structure
+        run: |
           mkdir -p Payload/WindClones.app
           
-          # 3. Find the file and move it
-          # We look in the .build folder which is where forks store compiled data
-          find .build -type f -name "WinClone" -exec cp {} Payload/WindClones.app/WindClones \;
+          # Find the compiled binary - it looks for the file 'WinClone'
+          BINARY_PATH=$(find ./build_output -type f -name "WinClone" -not -path "*.framework*" | head -n 1)
           
-          # 4. Create the Info.plist (The App's "ID Card")
+          if [ -z "$BINARY_PATH" ]; then
+            echo "Searching secondary location..."
+            BINARY_PATH=$(find ./build_output -type f ! -name "*.*" -not -path "*/.*" | head -n 1)
+          fi
+
+          echo "Found binary at: $BINARY_PATH"
+          cp "$BINARY_PATH" Payload/WindClones.app/WindClones
+          
+          # Create the Info.plist
           echo '<?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -41,7 +55,6 @@ jobs:
           </dict>
           </plist>' > Payload/WindClones.app/Info.plist
           
-          # 5. Make it a real app and zip it
           chmod +x Payload/WindClones.app/WindClones
           zip -r WindClones.ipa Payload
 
