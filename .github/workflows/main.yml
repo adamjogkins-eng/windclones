@@ -1,8 +1,8 @@
 name: Build WindClones
-on: 
+on:
   push:
-    branches: [ main, master ]
-  workflow_dispatch: # This adds a manual "Run" button
+    branches: ["**"]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,6 +12,7 @@ jobs:
 
       - name: Build for iOS
         run: |
+          # We use -derivedDataPath . to keep the files right here where we can see them
           xcodebuild clean build \
             -scheme "WinClone" \
             -destination 'generic/platform=iOS' \
@@ -20,18 +21,30 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
-      - name: Create IPA Structure
+      - name: Debug - List Files
         run: |
-          mkdir -p Payload/WindClones.app
+          echo "Listing all created .app folders:"
+          find ./build_output -name "*.app" -type d
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
           
-          # Find the app folder
+          # Find the actual .app folder
           APP_PATH=$(find ./build_output -name "*.app" -type d | head -n 1)
-          if [ -z "$APP_PATH" ]; then echo "No .app found"; exit 1; fi
           
-          cp -R "$APP_PATH/" Payload/WindClones.app/
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: No .app file was generated. The build likely failed higher up."
+            exit 1
+          fi
           
-          # Force the Info.plist with all hardware keys
-          cat <<EOF > Payload/WindClones.app/Info.plist
+          echo "Found App at: $APP_PATH"
+          cp -R "$APP_PATH" Payload/
+          
+          # Use the actual name of the found app for the Info.plist
+          APP_NAME=$(basename "$APP_PATH")
+          
+          cat <<EOF > "Payload/$APP_NAME/Info.plist"
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -47,9 +60,9 @@ jobs:
               <key>CFBundleShortVersionString</key>
               <string>3.0</string>
               <key>NSCameraUsageDescription</key>
-              <string>Used for OS Camera</string>
+              <string>Hardware access for OS</string>
               <key>NSMicrophoneUsageDescription</key>
-              <string>Used for OS Audio</string>
+              <string>Hardware access for OS</string>
               <key>LSRequiresIPhoneOS</key>
               <true/>
               <key>MinimumOSVersion</key>
@@ -60,9 +73,8 @@ jobs:
           
           zip -r WindClones.ipa Payload
 
-      - name: Upload Artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-Full-OS
+          name: WindClones-Built
           path: WindClones.ipa
-          if-no-files-found: error
