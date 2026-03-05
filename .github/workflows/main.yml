@@ -9,7 +9,6 @@ jobs:
 
       - name: Build for iOS
         run: |
-          # We force it to use the iPhoneOS SDK specifically
           xcodebuild build \
             -scheme "WinClone" \
             -destination 'generic/platform=iOS' \
@@ -22,12 +21,23 @@ jobs:
         run: |
           mkdir -p Payload/WinClone.app
           
-          # Find the compiled binary
-          # In Swift Packages, it's often inside a .framework or a specific Build folder
-          BINARY_PATH=$(find ./build_output -name "WinClone" -type f -maxdepth 4 | head -n 1)
+          # This command searches the build folder for the executable file named 'WinClone'
+          BINARY_PATH=$(find ./build_output -type f -name "WinClone" -not -path "*.framework*" -not -path "*.xctest*" | head -n 1)
+          
+          if [ -z "$BINARY_PATH" ]; then
+            echo "Error: Binary not found in build_output. Searching everything..."
+            BINARY_PATH=$(find . -type f -name "WinClone" -not -path "./.git*" | head -n 1)
+          fi
+
+          if [ -z "$BINARY_PATH" ]; then
+            echo "FATAL ERROR: Could not find the WinClone file anywhere."
+            exit 1
+          fi
+
+          echo "Found binary at: $BINARY_PATH"
           cp "$BINARY_PATH" Payload/WinClone.app/WinClone
           
-          # Create the Info.plist (The App's Passport)
+          # Create the Info.plist
           echo '<?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -46,6 +56,8 @@ jobs:
               <true/>
               <key>MinimumOSVersion</key>
               <string>17.0</string>
+              <key>UILaunchStoryboardName</key>
+              <string>LaunchScreen</string>
           </dict>
           </plist>' > Payload/WinClone.app/Info.plist
           
