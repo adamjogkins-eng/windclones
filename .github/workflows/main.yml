@@ -7,25 +7,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Executable
+      - name: Build for iOS
         run: |
-          # Force build as an executable for iOS
-          swift build -c release --triple arm64-apple-ios17.0-simulator
-          
+          # This forces Xcode to use the real iOS SDK which contains the Standard Library
+          xcodebuild build \
+            -scheme "WinClone" \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            -derivedDataPath ./build_output \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Create IPA Structure
+        run: |
           mkdir -p Payload/WindClones.app
           
-          # Find the actual binary in the hidden .build folder
-          REAL_BINARY=$(find .build -type f -name "WinClone" -not -path "*/.*" | head -n 1)
+          # Hunt for the compiled executable (should be several hundred KB now)
+          REAL_BINARY=$(find ./build_output -type f -perm +111 ! -name "*.*" -size +50k | head -n 1)
           
           if [ -z "$REAL_BINARY" ]; then
-            echo "FATAL: Executable not found in .build folder."
+            echo "Searching without size filter..."
+            REAL_BINARY=$(find ./build_output -type f -perm +111 ! -name "*.*" | head -n 1)
+          fi
+
+          if [ -z "$REAL_BINARY" ]; then
+            echo "FATAL: No binary found. Check if the build actually succeeded."
             exit 1
           fi
-          
+
           echo "Found binary at: $REAL_BINARY"
           cp "$REAL_BINARY" Payload/WindClones.app/WindClones
           
-          # Create Info.plist
+          # Info.plist
           cat <<EOF > Payload/WindClones.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -45,6 +58,8 @@ jobs:
               <true/>
               <key>MinimumOSVersion</key>
               <string>15.0</string>
+              <key>CFBundleSupportedPlatforms</key>
+              <array><string>iPhoneOS</string></array>
           </dict>
           </plist>
           EOF
@@ -55,5 +70,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-Final-Try
+          name: WindClones-Final
           path: WindClones.ipa
