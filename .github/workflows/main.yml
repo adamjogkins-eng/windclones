@@ -7,39 +7,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build for iOS
+      - name: Build Executable
         run: |
-          xcodebuild build \
-            -scheme "WinClone" \
-            -destination 'generic/platform=iOS' \
-            -configuration Release \
-            -derivedDataPath ./build_output \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES
-
-      - name: Create ESign IPA
-        run: |
+          # Force build as an executable for iOS
+          swift build -c release --triple arm64-apple-ios17.0-simulator
+          
           mkdir -p Payload/WindClones.app
           
-          # 1. Search every corner for a file that is NOT 0 bytes
-          # This looks for the largest file named 'WinClone' or 'WindClones'
-          REAL_BINARY=$(find ./build_output -type f -size +10k ! -name "*.*" | head -n 1)
-
+          # Find the actual binary in the hidden .build folder
+          REAL_BINARY=$(find .build -type f -name "WinClone" -not -path "*/.*" | head -n 1)
+          
           if [ -z "$REAL_BINARY" ]; then
-            echo "Searching system-wide..."
-            REAL_BINARY=$(find ~/Library/Developer/Xcode/DerivedData -type f -size +10k ! -name "*.*" | head -n 1)
-          fi
-
-          if [ -z "$REAL_BINARY" ]; then
-            echo "FATAL: No real binary found above 10KB."
+            echo "FATAL: Executable not found in .build folder."
             exit 1
           fi
-
-          echo "Found real binary at: $REAL_BINARY"
+          
+          echo "Found binary at: $REAL_BINARY"
           cp "$REAL_BINARY" Payload/WindClones.app/WindClones
           
-          # 2. Re-create Info.plist
+          # Create Info.plist
           cat <<EOF > Payload/WindClones.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -69,5 +55,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-Real-Binary
+          name: WindClones-Final-Try
           path: WindClones.ipa
