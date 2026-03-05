@@ -1,233 +1,267 @@
 import SwiftUI
+import AVFoundation
+import WebKit
 
-// --- DATA MODELS ---
-struct OSApp: Identifiable {
-    let id = UUID()
-    let name: String
-    let icon: String
-    let color: Color
-    var content: AnyView
+// --- 1. DATA MODELS (The OS Brain) ---
+struct UserApp: Codable, Identifiable {
+    var id = UUID()
+    var name: String
+    var icon: String
+    var color: String
+    var type: AppType
+    var content: String
+    enum AppType: String, Codable { case code, noCode }
 }
 
-// --- MAIN INTERFACE ---
+// --- 2. MAIN SYSTEM INTERFACE ---
 struct ContentView: View {
-    @State private var openedApp: OSApp? = nil
-    @State private var currentTime = Date()
+    @State private var openedApp: String? = nil
+    @AppStorage("user_apps_v6") var savedAppsData: Data = Data()
+    @AppStorage("os_notes") var notes: String = ""
     
-    // Timer to update the clock
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    var userApps: [UserApp] {
+        try? JSONDecoder().decode([UserApp].self, from: savedAppsData) ?? []
+    }
 
-    // Your App Library
-    let apps: [OSApp] = [
-        OSApp(name: "App Maker", icon: "hammer.fill", color: .blue, content: AnyView(AppMakerView())),
-        OSApp(name: "Safari", icon: "safari.fill", color: .blue, content: AnyView(BrowserView())),
-        OSApp(name: "Photos", icon: "photo.on.rectangle.angled", color: .purple, content: AnyView(GalleryView())),
-        OSApp(name: "Files", icon: "folder.fill", color: .yellow, content: AnyView(PlaceholderView(text: "No Documents Found"))),
-        OSApp(name: "Settings", icon: "gearshape.fill", color: .gray, content: AnyView(PlaceholderView(text: "Version 2.0 (Stable)"))),
-        OSApp(name: "Weather", icon: "cloud.sun.fill", color: .cyan, content: AnyView(PlaceholderView(text: "Sunny - 72°")))
-    ]
-    
     var body: some View {
         ZStack {
-            // 1. Wallpaper (iOS Style Gradient)
-            LinearGradient(gradient: Gradient(colors: [Color(hex: "1e3a8a"), Color(hex: "7e22ce")]), startPoint: .top, endPoint: .bottom)
+            // High-End OLED Background
+            Color.black.ignoresSafeArea()
+            RadialGradient(colors: [Color(hex: "1e293b"), .black], center: .center, startRadius: 2, endRadius: 700)
                 .ignoresSafeArea()
             
             VStack {
-                // 2. Status Bar
+                // Status Bar
                 HStack {
-                    Text(currentTime, style: .time)
-                        .font(.system(size: 14, weight: .semibold))
+                    Text(Date(), style: .time).font(.system(.caption, design: .rounded)).bold()
                     Spacer()
-                    HStack(spacing: 5) {
-                        Image(systemName: "cellularbars")
-                        Image(systemName: "wifi")
+                    HStack(spacing: 8) {
+                        Image(systemName: "video.fill")
+                        Image(systemName: "mic.fill")
                         Image(systemName: "battery.100")
-                    }
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 30)
-                
-                // 3. App Grid
-                LazyVGrid(columns: [GridItem(.fixed(85)), GridItem(.fixed(85)), GridItem(.fixed(85)), GridItem(.fixed(85))], spacing: 25) {
-                    ForEach(apps) { app in
-                        AppIconView(app: app) {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { openedApp = app }
+                    }.font(.system(size: 12))
+                }.foregroundColor(.white).padding(.horizontal, 30).padding(.top, 10)
+
+                // App Grid
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 25) {
+                        // Hardware & Tools
+                        OSIcon(name: "Camera", icon: "camera.fill", color: .gray) { openedApp = "Camera" }
+                        OSIcon(name: "Dev Studio", icon: "terminal.fill", color: .blue) { openedApp = "Dev" }
+                        OSIcon(name: "Notes", icon: "note.text", color: .yellow) { openedApp = "Notes" }
+                        OSIcon(name: "Music", icon: "music.note", color: .pink) { openedApp = "Music" }
+                        
+                        // Games
+                        OSIcon(name: "Dash", icon: "bolt.fill", color: .orange) { openedApp = "Dash" }
+                        OSIcon(name: "Memory", icon: "brain.fill", color: .green) { openedApp = "Memory" }
+                        OSIcon(name: "Titan", icon: "hand.tap.fill", color: .red) { openedApp = "Titan" }
+                        
+                        // User-Created Apps (Loaded from Local Storage)
+                        ForEach(userApps) { app in
+                            OSIcon(name: app.name, icon: "app.fill", color: Color(hex: app.color)) {
+                                openedApp = "USER_\(app.id.uuidString)"
+                            }
                         }
-                    }
+                    }.padding(25)
                 }
-                .padding(.top, 30)
                 
                 Spacer()
                 
-                // 4. The Dock (Ultra Thin Material)
-                HStack(spacing: 22) {
-                    ForEach(apps.prefix(4)) { app in
-                        AppIconView(app: app, isDock: true) {
-                            withAnimation(.spring()) { openedApp = app }
-                        }
-                    }
+                // The Dock
+                HStack(spacing: 30) {
+                    Image(systemName: "phone.fill").foregroundColor(.green)
+                    Image(systemName: "safari.fill").foregroundColor(.blue)
+                    Image(systemName: "message.fill").foregroundColor(.green)
                 }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 20)
-                .background(.ultraThinMaterial)
-                .cornerRadius(35)
-                .padding(.bottom, 20)
+                .font(.title2).padding(.vertical, 15).padding(.horizontal, 40)
+                .background(.ultraThinMaterial).cornerRadius(30).padding(.bottom, 15)
             }
-            
-            // 5. App Window System
-            if let activeApp = openedApp {
+
+            // WINDOW MANAGER (Handles opening every app)
+            if let active = openedApp {
                 ZStack {
-                    Color.black.opacity(0.1).ignoresSafeArea()
-                        .onTapGesture { withAnimation { openedApp = nil } }
-                    
+                    Color(.systemBackground).ignoresSafeArea()
                     VStack(spacing: 0) {
-                        // Handle bar for "Closing"
-                        Capsule()
-                            .fill(Color.gray.opacity(0.5))
-                            .frame(width: 40, height: 5)
-                            .padding(.top, 10)
-                        
                         HStack {
-                            Text(activeApp.name).font(.title3).bold()
+                            Text(active.contains("USER") ? "App Runner" : active).bold()
                             Spacer()
-                            Button(action: { withAnimation { openedApp = nil } }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.gray)
-                                    .font(.title2)
+                            Button("Exit") { withAnimation { openedApp = nil } }.bold()
+                        }.padding().background(.ultraThinMaterial)
+                        
+                        // App Routing Logic
+                        Group {
+                            if active == "Camera" { CameraView() }
+                            else if active == "Dev" { DevStudioView() }
+                            else if active == "Notes" { TextEditor(text: $notes).padding() }
+                            else if active == "Music" { MusicView() }
+                            else if active == "Dash" { SquareDash() }
+                            else if active == "Memory" { MemoryGame() }
+                            else if active == "Titan" { TapTitan() }
+                            else if active.contains("USER") {
+                                if let app = userApps.first(where: { "USER_\($0.id.uuidString)" == active }) {
+                                    UserAppRunner(app: app)
+                                }
                             }
                         }
-                        .padding()
-                        
-                        activeApp.content
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .background(Color(.systemBackground))
-                    .cornerRadius(30)
-                    .padding(.top, 40) // Makes it look like a slide-up sheet
-                    .shadow(color: .black.opacity(0.3), radius: 20)
-                    .transition(.move(edge: .bottom))
-                }
-                .ignoresSafeArea()
+                }.transition(.move(edge: .bottom))
             }
         }
-        .onReceive(timer) { input in currentTime = input }
     }
 }
 
-// --- SUBVIEWS ---
+// --- 3. HARDWARE ENGINES (Camera) ---
+struct CameraView: View {
+    var body: some View {
+        ZStack {
+            CameraPreview().ignoresSafeArea()
+            VStack {
+                Spacer()
+                Circle().stroke(Color.white, lineWidth: 4).frame(width: 70, height: 70)
+                    .padding(.bottom, 40)
+            }
+        }
+    }
+}
 
-struct AppIconView: View {
-    let app: OSApp
-    var isDock: Bool = false
-    let action: () -> Void
+struct CameraPreview: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: UIScreen.main.bounds)
+        let session = AVCaptureSession()
+        guard let device = AVCaptureDevice.default(for: .video),
+              let input = try? AVCaptureDeviceInput(device: device) else { return view }
+        if session.canAddInput(input) { session.addInput(input) }
+        let preview = AVCaptureVideoPreviewLayer(session: session)
+        preview.videoGravity = .resizeAspectFill
+        preview.frame = view.frame
+        view.layer.addSublayer(preview)
+        DispatchQueue.global().async { session.startRunning() }
+        return view
+    }
+    func updateUIView(_ uiView: UIView, context: Context) {}
+}
+
+// --- 4. DEV STUDIO (Code & No-Code Builder) ---
+struct DevStudioView: View {
+    @AppStorage("user_apps_v6") var savedAppsData: Data = Data()
+    @State private var mode: UserApp.AppType = .noCode
+    @State private var appName = ""
+    @State private var code = "<html><body><h1>Hello</h1></body></html>"
     
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
+        VStack {
+            Picker("Mode", selection: $mode) {
+                Text("No-Code").tag(UserApp.AppType.noCode)
+                Text("HTML Code").tag(UserApp.AppType.code)
+            }.pickerStyle(.segmented).padding()
+            
+            Form {
+                TextField("App Name", text: $appName)
+                if mode == .code {
+                    TextEditor(text: $code).font(.system(.body, design: .monospaced)).frame(height: 200)
+                } else {
+                    Text("No-Code Template: Professional Card").foregroundColor(.gray)
+                }
+                Button("Install App") {
+                    var apps = (try? JSONDecoder().decode([UserApp].self, from: savedAppsData)) ?? []
+                    apps.append(UserApp(name: appName, icon: "app", color: "3b82f6", type: mode, content: code))
+                    if let data = try? JSONEncoder().encode(apps) { savedAppsData = data }
+                    appName = ""
+                }.disabled(appName.isEmpty)
+            }
+        }
+    }
+}
+
+struct UserAppRunner: View {
+    let app: UserApp
+    var body: some View {
+        if app.type == .code { WebView(html: app.content) }
+        else { VStack { Text(app.name).font(.largeTitle); Text("Built with No-Code") } }
+    }
+}
+
+// --- 5. GAMES & EXTRAS ---
+struct SquareDash: View {
+    @State private var pos = CGSize.zero
+    var body: some View {
+        VStack {
+            Spacer()
+            RoundedRectangle(cornerRadius: 10).fill(.orange).frame(width: 50, height: 50)
+                .offset(pos).onTapGesture {
+                    pos = CGSize(width: .random(in: -100...100), height: .random(in: -200...200))
+                }
+            Spacer()
+        }
+    }
+}
+
+struct MemoryGame: View {
+    @State private var cards = ["💎", "💎", "👻", "👻", "🔥", "🔥"].shuffled()
+    var body: some View {
+        LazyVGrid(columns: [GridItem(), GridItem()]) {
+            ForEach(cards, id: \.self) { card in
                 ZStack {
-                    RoundedRectangle(cornerRadius: isDock ? 14 : 18)
-                        .fill(app.color.gradient)
-                        .frame(width: isDock ? 60 : 65, height: isDock ? 60 : 65)
-                    Image(systemName: app.icon)
-                        .foregroundColor(.white)
-                        .font(.system(size: isDock ? 28 : 32))
-                }
-                if !isDock {
-                    Text(app.name)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
+                    RoundedRectangle(cornerRadius: 10).fill(.green).frame(height: 100)
+                    Text(card).font(.largeTitle)
                 }
             }
-        }
+        }.padding()
     }
 }
 
-struct AppMakerView: View {
-    @State private var htmlCode = "<h1>Hello iOS</h1>\n<p>This is my custom app engine.</p>"
+struct TapTitan: View {
+    @State private var taps = 0
     var body: some View {
         VStack {
-            TextEditor(text: $htmlCode)
-                .font(.system(.body, design: .monospaced))
-                .padding(10)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(10)
-            
-            Text("PREVIEW")
-                .font(.caption).bold().foregroundColor(.gray)
-            
-            ScrollView {
-                Text("Rendering: \(htmlCode)") // Simplified for demo
-                    .padding()
-            }
-            .frame(maxWidth: .infinity)
-            .background(Color.blue.opacity(0.05))
-            .cornerRadius(10)
-        }
-        .padding()
-    }
-}
-
-struct BrowserView: View {
-    @State private var url = "google.com"
-    var body: some View {
-        VStack {
-            HStack {
-                Image(systemName: "lock.fill").font(.caption)
-                TextField("Search or enter website", text: $url)
-            }
-            .padding(10)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(10)
-            .padding()
-            
-            Spacer()
-            Image(systemName: "safari").font(.system(size: 100)).foregroundColor(.gray.opacity(0.2))
-            Spacer()
+            Text("\(taps)").font(.system(size: 80, weight: .bold))
+            Button("TAP") { taps += 1 }.buttonStyle(.borderedProminent)
         }
     }
 }
 
-struct GalleryView: View {
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())]) {
-                ForEach(0..<6) { _ in
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(height: 150)
-                }
-            }
-            .padding()
-        }
-    }
-}
-
-struct PlaceholderView: View {
-    let text: String
+struct MusicView: View {
     var body: some View {
         VStack {
             Spacer()
-            Text(text).foregroundColor(.gray)
+            Image(systemName: "music.note.list").font(.system(size: 100)).foregroundColor(.pink)
+            Text("OS Media Player").font(.headline).padding()
+            HStack(spacing: 30) {
+                Image(systemName: "backward.fill")
+                Image(systemName: "play.fill").font(.largeTitle)
+                Image(systemName: "forward.fill")
+            }
             Spacer()
         }
     }
 }
 
-// Helper for Hex Colors
+// --- 6. UTILITIES ---
+struct OSIcon: View {
+    let name: String; let icon: String; let color: Color; let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            VStack {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 15).fill(color.gradient).frame(width: 60, height: 60)
+                    Image(systemName: icon).foregroundColor(.white).font(.title3)
+                }
+                Text(name).font(.system(size: 10)).foregroundColor(.white)
+            }
+        }
+    }
+}
+
+struct WebView: UIViewRepresentable {
+    let html: String
+    func makeUIView(context: Context) -> WKWebView { WKWebView() }
+    func updateUIView(_ uiView: WKWebView, context: Context) { uiView.loadHTMLString(html, baseURL: nil) }
+}
+
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3: (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default: (a, r, g, b) = (1, 1, 1, 0)
-        }
-        self.init(.sRGB, red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255, opacity: Double(a) / 255)
+        var int: UInt64 = 0; Scanner(string: hex).scanHexInt64(&int)
+        self.init(.sRGB, red: Double(int >> 16) / 255, green: Double(int >> 8 & 0xFF) / 255, blue: Double(int & 0xFF) / 255, opacity: 1)
     }
 }
