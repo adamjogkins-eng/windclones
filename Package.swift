@@ -1,10 +1,10 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "WinClone",
     platforms: [
-        .iOS(.v18) // We are officially targeting the latest and greatest
+        .iOS(.v18) 
     ],
     products: [
         .executable(name: "WinClone", targets: ["WinClone"])
