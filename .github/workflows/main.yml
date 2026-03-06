@@ -1,7 +1,7 @@
 name: Build WindClones
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -12,22 +12,23 @@ jobs:
 
       - name: Build for iOS
         run: |
-          xcodebuild clean build \
+          xcodebuild build \
             -scheme "WinClone" \
             -destination 'generic/platform=iOS' \
             -configuration Release \
             -derivedDataPath ./build_output \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
 
       - name: Package IPA
         run: |
           mkdir -p Payload
-          # Search everywhere for the app file
-          APP_PATH=$(find ./build_output -name "*.app" -type d | grep -v "Archive" | head -n 1)
+          # Search for the .app folder inside the build output
+          APP_PATH=$(find ./build_output -name "*.app" -type d | head -n 1)
           
           if [ -z "$APP_PATH" ]; then
-            echo "FATAL ERROR: No .app folder produced. Checking Build Logs..."
+            echo "FATAL ERROR: No .app folder produced. The compiler likely hit a syntax error."
             exit 1
           fi
           
@@ -35,8 +36,8 @@ jobs:
           cp -R "$APP_PATH" Payload/
           zip -r WindClones.ipa Payload
 
-      - name: Upload
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-Built
+          name: WindClones-Final
           path: WindClones.ipa
