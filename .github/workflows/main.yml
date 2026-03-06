@@ -12,7 +12,7 @@ jobs:
 
       - name: Build for iOS
         run: |
-          # We use -derivedDataPath . to keep the files right here where we can see them
+          # The -scheme must match the name in Package.swift or the folder
           xcodebuild clean build \
             -scheme "WinClone" \
             -destination 'generic/platform=iOS' \
@@ -21,30 +21,22 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
-      - name: Debug - List Files
-        run: |
-          echo "Listing all created .app folders:"
-          find ./build_output -name "*.app" -type d
-
-      - name: Package IPA
+      - name: Create IPA Structure
         run: |
           mkdir -p Payload
-          
-          # Find the actual .app folder
-          APP_PATH=$(find ./build_output -name "*.app" -type d | head -n 1)
+          # Search for the .app specifically in the Release-iphoneos directory
+          APP_PATH=$(find ./build_output/Build/Products/Release-iphoneos -name "*.app" -type d | head -n 1)
           
           if [ -z "$APP_PATH" ]; then
-            echo "ERROR: No .app file was generated. The build likely failed higher up."
+            echo "ERROR: Build failed to generate an .app file."
             exit 1
           fi
           
-          echo "Found App at: $APP_PATH"
+          echo "Found app at: $APP_PATH"
           cp -R "$APP_PATH" Payload/
           
-          # Use the actual name of the found app for the Info.plist
-          APP_NAME=$(basename "$APP_PATH")
-          
-          cat <<EOF > "Payload/$APP_NAME/Info.plist"
+          # Force hardware permissions into the app
+          cat <<EOF > "Payload/$(basename "$APP_PATH")/Info.plist"
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -76,5 +68,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-Built
+          name: WindClones-Complete
           path: WindClones.ipa
