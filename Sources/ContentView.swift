@@ -19,7 +19,7 @@ struct ContentView: View {
     @AppStorage("user_apps_vFinal_Fixed") var savedAppsData: Data = Data()
     @AppStorage("os_notes_persistent") var notes: String = ""
     
-    // FIXED: Safe decoding logic to prevent build error 65
+    // SAFE DECODING: This was causing the previous build error
     var userApps: [UserApp] {
         if let decoded = try? JSONDecoder().decode([UserApp].self, from: savedAppsData) {
             return decoded
@@ -29,7 +29,6 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            // High-End OLED Background
             Color.black.ignoresSafeArea()
             RadialGradient(colors: [Color(hex: "1e293b"), .black], center: .center, startRadius: 2, endRadius: 700)
                 .ignoresSafeArea()
@@ -68,7 +67,7 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                // The Dock
+                // Dock
                 HStack(spacing: 30) {
                     Image(systemName: "phone.fill").foregroundColor(.green)
                     Image(systemName: "safari.fill").foregroundColor(.blue)
@@ -141,7 +140,7 @@ struct CameraPreview: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {}
 }
 
-// --- 4. DEV STUDIO (CODE & NO-CODE) ---
+// --- 4. DEV STUDIO ---
 struct DevStudioView: View {
     @AppStorage("user_apps_vFinal_Fixed") var savedAppsData: Data = Data()
     @State private var mode: UserApp.AppType = .noCode
@@ -160,7 +159,7 @@ struct DevStudioView: View {
                 if mode == .code {
                     TextEditor(text: $code).font(.system(.body, design: .monospaced)).frame(height: 200)
                 }
-                Button("Install to Home Screen") {
+                Button("Install") {
                     var apps: [UserApp] = []
                     if let decoded = try? JSONDecoder().decode([UserApp].self, from: savedAppsData) {
                         apps = decoded
