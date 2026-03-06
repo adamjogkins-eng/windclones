@@ -20,31 +20,23 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
-      - name: Diagnostic File Check
-        run: |
-          echo "=== SEARCHING FOR APP BUNDLE ==="
-          # This lists all directories ending in .app
-          find . -name "*.app" -type d
-          echo "=== CHECKING BUILD OUTPUT FOLDER ==="
-          ls -R ./build_output | grep ":$" | sed -e 's/:$//' -e 's/[^-][^\/]*\//--/g' -e 's/^/   /'
-
       - name: Package IPA
         run: |
           mkdir -p Payload
-          # The "Ultimate Find" command
+          # Search everywhere for the app file
           APP_PATH=$(find ./build_output -name "*.app" -type d | grep -v "Archive" | head -n 1)
           
           if [ -z "$APP_PATH" ]; then
-            echo "FATAL ERROR: The Swift compiler failed. No .app folder exists."
+            echo "FATAL ERROR: No .app folder produced. Checking Build Logs..."
             exit 1
           fi
           
-          echo "Success! Found app at: $APP_PATH"
+          echo "Found app at: $APP_PATH"
           cp -R "$APP_PATH" Payload/
           zip -r WindClones.ipa Payload
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-Diagnostic-Result
+          name: WindClones-Built
           path: WindClones.ipa
