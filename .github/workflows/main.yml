@@ -12,7 +12,6 @@ jobs:
 
       - name: Build for iOS
         run: |
-          # The -scheme must match the name in Package.swift or the folder
           xcodebuild clean build \
             -scheme "WinClone" \
             -destination 'generic/platform=iOS' \
@@ -21,52 +20,31 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
-      - name: Create IPA Structure
+      - name: Diagnostic File Check
+        run: |
+          echo "=== SEARCHING FOR APP BUNDLE ==="
+          # This lists all directories ending in .app
+          find . -name "*.app" -type d
+          echo "=== CHECKING BUILD OUTPUT FOLDER ==="
+          ls -R ./build_output | grep ":$" | sed -e 's/:$//' -e 's/[^-][^\/]*\//--/g' -e 's/^/   /'
+
+      - name: Package IPA
         run: |
           mkdir -p Payload
-          # Search for the .app specifically in the Release-iphoneos directory
-          APP_PATH=$(find ./build_output/Build/Products/Release-iphoneos -name "*.app" -type d | head -n 1)
+          # The "Ultimate Find" command
+          APP_PATH=$(find ./build_output -name "*.app" -type d | grep -v "Archive" | head -n 1)
           
           if [ -z "$APP_PATH" ]; then
-            echo "ERROR: Build failed to generate an .app file."
+            echo "FATAL ERROR: The Swift compiler failed. No .app folder exists."
             exit 1
           fi
           
-          echo "Found app at: $APP_PATH"
+          echo "Success! Found app at: $APP_PATH"
           cp -R "$APP_PATH" Payload/
-          
-          # Force hardware permissions into the app
-          cat <<EOF > "Payload/$(basename "$APP_PATH")/Info.plist"
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>WinClone</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.win.clones</string>
-              <key>CFBundleName</key>
-              <string>WindClones</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>3.0</string>
-              <key>NSCameraUsageDescription</key>
-              <string>Hardware access for OS</string>
-              <key>NSMicrophoneUsageDescription</key>
-              <string>Hardware access for OS</string>
-              <key>LSRequiresIPhoneOS</key>
-              <true/>
-              <key>MinimumOSVersion</key>
-              <string>15.0</string>
-          </dict>
-          </plist>
-          EOF
-          
           zip -r WindClones.ipa Payload
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-Complete
+          name: WindClones-Diagnostic-Result
           path: WindClones.ipa
