@@ -10,42 +10,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build for iOS
+      - name: Build Binary
         run: |
           xcodebuild build \
             -scheme "WinClone" \
             -destination 'generic/platform=iOS' \
             -configuration Release \
             -derivedDataPath ./build_output \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES
+            CODE_SIGNING_ALLOWED=NO
 
-      - name: Debug Output Structure
-        run: ls -R ./build_output/Build/Products/
-
-      - name: Package IPA
+      - name: Manual App Packaging
         run: |
-          mkdir -p Payload
-          # Search specifically in the Products folder where the binary lives
-          APP_PATH=$(find ./build_output/Build/Products/Release-iphoneos -name "*.app" -type d | head -n 1)
+          # 1. Create the .app folder structure
+          mkdir -p Payload/WinClone.app
           
-          if [ -z "$APP_PATH" ]; then
-            echo "Searching fallback paths..."
-            APP_PATH=$(find ./build_output -name "*.app" -type d | head -n 1)
-          fi
-
-          if [ -z "$APP_PATH" ]; then
-            echo "FATAL ERROR: No .app folder found."
-            exit 1
-          fi
+          # 2. Find the actual binary executable
+          BINARY_PATH=$(find ./build_output -name "WinClone" -type f -perm +111 | head -n 1)
+          echo "Found binary at: $BINARY_PATH"
           
-          echo "Found app at: $APP_PATH"
-          cp -R "$APP_PATH" Payload/
+          # 3. Copy binary and Info.plist into the app folder
+          cp "$BINARY_PATH" Payload/WinClone.app/WinClone
+          cp Sources/Info.plist Payload/WinClone.app/Info.plist
+          
+          # 4. Finalize IPA
           zip -r WindClones.ipa Payload
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-iOS18
+          name: WindClones-iOS18-Fixed
           path: WindClones.ipa
