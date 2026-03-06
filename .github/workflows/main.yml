@@ -6,9 +6,12 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15  # Use the latest macOS runner for Xcode 16+ support
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set Xcode Version
+        run: sudo xcode-select -s /Applications/Xcode_16.app # Ensures we use 16.0+
 
       - name: Build for iOS
         run: |
@@ -24,20 +27,16 @@ jobs:
       - name: Package IPA
         run: |
           mkdir -p Payload
-          # Search for the .app folder inside the build output
           APP_PATH=$(find ./build_output -name "*.app" -type d | head -n 1)
-          
           if [ -z "$APP_PATH" ]; then
-            echo "FATAL ERROR: No .app folder produced. The compiler likely hit a syntax error."
+            echo "Build failed to produce .app bundle"
             exit 1
           fi
-          
-          echo "Found app at: $APP_PATH"
           cp -R "$APP_PATH" Payload/
           zip -r WindClones.ipa Payload
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-Final
+          name: WindClones-iOS18
           path: WindClones.ipa
