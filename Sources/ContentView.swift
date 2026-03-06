@@ -16,11 +16,12 @@ struct UserApp: Codable, Identifiable {
 // --- 2. MAIN SYSTEM ---
 struct ContentView: View {
     @State private var openedApp: String? = nil
-    @AppStorage("user_apps_vFinal") var savedAppsData: Data = Data()
+    @AppStorage("user_apps_vFinal_v2") var savedAppsData: Data = Data()
     @AppStorage("os_notes_persistent") var notes: String = ""
     
-    // FIXED: This logic was causing the "Fatal Error". Now it's build-safe.
+    // SAFE DECODING: Prevents compiler from crashing if data is empty
     var userApps: [UserApp] {
+        guard !savedAppsData.isEmpty else { return [] }
         let decoder = JSONDecoder()
         if let decoded = try? decoder.decode([UserApp].self, from: savedAppsData) {
             return decoded
@@ -143,7 +144,7 @@ struct CameraPreview: UIViewRepresentable {
 
 // --- 4. DEV STUDIO ---
 struct DevStudioView: View {
-    @AppStorage("user_apps_vFinal") var savedAppsData: Data = Data()
+    @AppStorage("user_apps_vFinal_v2") var savedAppsData: Data = Data()
     @State private var mode: UserApp.AppType = .noCode
     @State private var appName = ""
     @State private var code = "<html><body style='background:cyan;'><h1>New App</h1></body></html>"
@@ -160,7 +161,7 @@ struct DevStudioView: View {
                 if mode == .code {
                     TextEditor(text: $code).font(.system(.body, design: .monospaced)).frame(height: 200)
                 }
-                Button("Install to Home Screen") {
+                Button("Install App") {
                     var apps: [UserApp] = []
                     if let decoded = try? JSONDecoder().decode([UserApp].self, from: savedAppsData) {
                         apps = decoded
@@ -178,7 +179,7 @@ struct UserAppRunner: View {
     let app: UserApp
     var body: some View {
         if app.type == .code { WebView(html: app.content) }
-        else { VStack { Text(app.name).font(.largeTitle); Text("Custom App") } }
+        else { VStack { Text(app.name).font(.largeTitle); Text("Custom App Template") } }
     }
 }
 
@@ -262,7 +263,12 @@ struct WebView: UIViewRepresentable {
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0; Scanner(string: hex).scanHexInt64(&int)
-        self.init(.sRGB, red: Double(int >> 16) / 255, green: Double(int >> 8 & 0xFF) / 255, blue: Double(int & 0xFF) / 255, opacity: 1)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let r, g, b: Double
+        r = Double((int >> 16) & 0xFF) / 255
+        g = Double((int >> 8) & 0xFF) / 255
+        b = Double(int & 0xFF) / 255
+        self.init(.sRGB, red: r, green: g, blue: b, opacity: 1)
     }
 }
