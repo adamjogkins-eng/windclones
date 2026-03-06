@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "WinClone",
     platforms: [
-        .iOS(.v15)
+        .iOS(.v18) // We are officially targeting the latest and greatest
     ],
     products: [
         .executable(name: "WinClone", targets: ["WinClone"])
