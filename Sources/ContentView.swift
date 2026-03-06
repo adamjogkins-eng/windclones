@@ -35,13 +35,13 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            RadialGradient(colors: [Color(hex: "1e293b"), .black], center: .center, startRadius: 2, endRadius: 700)
+            RadialGradient(gradient: Gradient(colors: [Color(hex: "1e293b"), .black]), center: .center, startRadius: 2, endRadius: 700)
                 .ignoresSafeArea()
             
             VStack {
                 // Status Bar
                 HStack {
-                    Text(Date(), style: .time).font(.system(.caption, design: .rounded)).bold()
+                    Text(Date(), style: .time).font(.system(.caption, design: .rounded).weight(.bold))
                     Spacer()
                     HStack(spacing: 8) {
                         Image(systemName: "wifi")
@@ -78,19 +78,21 @@ struct ContentView: View {
                     Image(systemName: "message.fill").foregroundColor(.green)
                 }
                 .font(.title2).padding(.vertical, 15).padding(.horizontal, 40)
-                .background(.ultraThinMaterial).cornerRadius(30).padding(.bottom, 15)
+                .background(Color.white.opacity(0.1)).cornerRadius(30).padding(.bottom, 15)
             }
 
             // Window Manager
             if let active = openedApp {
                 ZStack {
-                    Color(.systemBackground).ignoresSafeArea()
+                    Color(UIColor.systemBackground).ignoresSafeArea()
                     VStack(spacing: 0) {
                         HStack {
-                            Text(active.contains("USER") ? "App Runner" : active).bold()
+                            Text(active.contains("USER") ? "App Runner" : active).font(.headline)
                             Spacer()
-                            Button("Exit") { withAnimation { openedApp = nil } }.bold()
-                        }.padding().background(.ultraThinMaterial)
+                            Button(action: { withAnimation { openedApp = nil } }) {
+                                Text("Exit").fontWeight(.bold)
+                            }
+                        }.padding().background(Color.gray.opacity(0.1))
                         
                         Group {
                             if active == "Paint" { PaintView() }
@@ -113,7 +115,7 @@ struct ContentView: View {
     }
 }
 
-// --- 3. NEW APP: PAINT STUDIO ---
+// --- 3. PAINT STUDIO (iOS 15 Canvas) ---
 struct PaintView: View {
     @State private var currentLine = Line(points: [], color: .blue)
     @State private var lines: [Line] = []
@@ -147,7 +149,7 @@ struct PaintView: View {
     }
 }
 
-// --- 4. SYSTEM APPS & GAMES (UNCHANGED FOR STABILITY) ---
+// --- 4. SYSTEM APPS ---
 struct DevStudioView: View {
     @AppStorage("user_apps_vFinal_v7") var savedAppsData: Data = Data()
     @State private var mode: UserApp.AppType = .noCode
@@ -166,7 +168,7 @@ struct DevStudioView: View {
                 if mode == .code {
                     TextEditor(text: $code).font(.system(.body, design: .monospaced)).frame(height: 150)
                 }
-                Button("Install to Home Screen") {
+                Button("Install App") {
                     var apps: [UserApp] = []
                     if let decoded = try? JSONDecoder().decode([UserApp].self, from: savedAppsData) { apps = decoded }
                     apps.append(UserApp(name: appName, icon: "app", color: "3b82f6", type: mode, content: code))
@@ -191,9 +193,9 @@ struct SquareDash: View {
     var body: some View {
         VStack {
             Spacer()
-            RoundedRectangle(cornerRadius: 10).fill(.orange).frame(width: 50, height: 50)
+            RoundedRectangle(cornerRadius: 10).fill(Color.orange).frame(width: 50, height: 50)
                 .offset(pos).onTapGesture {
-                    pos = CGSize(width: .random(in: -100...100), height: .random(in: -200...200))
+                    pos = CGSize(width: CGFloat.random(in: -100...100), height: CGFloat.random(in: -200...200))
                 }
             Spacer()
         }
@@ -206,7 +208,7 @@ struct MemoryGame: View {
         LazyVGrid(columns: [GridItem(), GridItem()]) {
             ForEach(0..<cards.count, id: \.self) { i in
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10).fill(.green).frame(height: 80)
+                    RoundedRectangle(cornerRadius: 10).fill(Color.green).frame(height: 80)
                     Text(cards[i]).font(.largeTitle)
                 }
             }
@@ -219,7 +221,7 @@ struct TapTitan: View {
     var body: some View {
         VStack {
             Text("\(taps)").font(.system(size: 60, weight: .bold))
-            Button("TAP") { taps += 1 }.buttonStyle(.borderedProminent)
+            Button("TAP") { taps += 1 }
         }
     }
 }
@@ -233,13 +235,14 @@ struct MusicView: View {
     }
 }
 
+// --- 5. HELPERS ---
 struct OSIcon: View {
     let name: String; let icon: String; let color: Color; let action: () -> Void
     var body: some View {
         Button(action: action) {
             VStack {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 15).fill(color.gradient).frame(width: 60, height: 60)
+                    RoundedRectangle(cornerRadius: 15).fill(color).frame(width: 60, height: 60)
                     Image(systemName: icon).foregroundColor(.white).font(.title3)
                 }
                 Text(name).font(.system(size: 10)).foregroundColor(.white)
