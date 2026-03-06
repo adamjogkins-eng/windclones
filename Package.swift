@@ -3,13 +3,16 @@ import PackageDescription
 
 let package = Package(
     name: "WinClone",
-    platforms: [.iOS(.v17)],
+    platforms: [
+        .iOS(.v15)
+    ],
     products: [
-        .executable(name: "WinClone", targets: ["WinClone"]),
+        .executable(name: "WinClone", targets: ["WinClone"])
     ],
     targets: [
         .executableTarget(
             name: "WinClone",
-            path: "Sources")
+            path: "Sources"
+        )
     ]
 )
