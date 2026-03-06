@@ -1,3 +1,4 @@
+
 import SwiftUI
 import WebKit
 
@@ -12,48 +13,48 @@ struct UserApp: Codable, Identifiable {
     enum AppType: String, Codable { case code, noCode }
 }
 
-struct Line {
-    var points: [CGPoint]
-    var color: Color
-}
-
 // --- 2. MAIN SYSTEM ---
 struct ContentView: View {
     @State private var openedApp: String? = nil
-    @AppStorage("user_apps_vFinal_v7") var savedAppsData: Data = Data()
+    @AppStorage("user_apps_v18_v1") var savedAppsData: Data = Data()
     @AppStorage("os_notes_persistent") var notes: String = ""
     
     var userApps: [UserApp] {
         if savedAppsData.isEmpty { return [] }
-        let decoder = JSONDecoder()
-        if let decoded = try? decoder.decode([UserApp].self, from: savedAppsData) {
-            return decoded
-        }
-        return []
+        return (try? JSONDecoder().decode([UserApp].self, from: savedAppsData)) ?? []
     }
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-            RadialGradient(gradient: Gradient(colors: [Color(hex: "1e293b"), .black]), center: .center, startRadius: 2, endRadius: 700)
-                .ignoresSafeArea()
+            // iOS 18 Mesh-style Background
+            MeshGradient(width: 3, height: 3, points: [
+                [0, 0], [0.5, 0], [1, 0],
+                [0, 0.5], [0.5, 0.5], [1, 0.5],
+                [0, 1], [0.5, 1], [1, 1]
+            ], colors: [
+                .black, .indigo, .black,
+                .blue, .black, .purple,
+                .black, .black, .black
+            ])
+            .ignoresSafeArea()
             
             VStack {
                 // Status Bar
                 HStack {
-                    Text(Date(), style: .time).font(.system(.caption, design: .rounded).weight(.bold))
+                    Text(Date(), style: .time).font(.caption).bold()
                     Spacer()
-                    HStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "cellularbars")
                         Image(systemName: "wifi")
                         Image(systemName: "battery.100")
-                    }.font(.system(size: 12))
+                    }.font(.caption)
                 }.foregroundColor(.white).padding(.horizontal, 30).padding(.top, 10)
 
                 // App Grid
                 ScrollView {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 25) {
                         OSIcon(name: "Paint", icon: "paintbrush.fill", color: .purple) { openedApp = "Paint" }
-                        OSIcon(name: "Dev Studio", icon: "terminal.fill", color: .gray) { openedApp = "Dev" }
+                        OSIcon(name: "Dev Studio", icon: "terminal.fill", color: .blue) { openedApp = "Dev" }
                         OSIcon(name: "Notes", icon: "note.text", color: .yellow) { openedApp = "Notes" }
                         OSIcon(name: "Music", icon: "music.note", color: .pink) { openedApp = "Music" }
                         
@@ -78,7 +79,8 @@ struct ContentView: View {
                     Image(systemName: "message.fill").foregroundColor(.green)
                 }
                 .font(.title2).padding(.vertical, 15).padding(.horizontal, 40)
-                .background(Color.white.opacity(0.1)).cornerRadius(30).padding(.bottom, 15)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30))
+                .padding(.bottom, 20)
             }
 
             // Window Manager
@@ -87,38 +89,41 @@ struct ContentView: View {
                     Color(UIColor.systemBackground).ignoresSafeArea()
                     VStack(spacing: 0) {
                         HStack {
-                            Text(active.contains("USER") ? "App Runner" : active).font(.headline)
+                            Text(active.contains("USER") ? "Custom App" : active).font(.headline)
                             Spacer()
-                            Button(action: { withAnimation { openedApp = nil } }) {
-                                Text("Exit").fontWeight(.bold)
-                            }
-                        }.padding().background(Color.gray.opacity(0.1))
+                            Button("Exit", role: .destructive) {
+                                withAnimation(.spring()) { openedApp = nil }
+                            }.buttonStyle(.borderedProminent).controlSize(.small)
+                        }.padding().background(.ultraThinMaterial)
                         
-                        Group {
-                            if active == "Paint" { PaintView() }
-                            else if active == "Dev" { DevStudioView() }
-                            else if active == "Notes" { TextEditor(text: $notes).padding() }
-                            else if active == "Music" { MusicView() }
-                            else if active == "Dash" { SquareDash() }
-                            else if active == "Memory" { MemoryGame() }
-                            else if active == "Titan" { TapTitan() }
-                            else if active.contains("USER") {
-                                if let app = userApps.first(where: { "USER_\($0.id.uuidString)" == active }) {
-                                    UserAppRunner(app: app)
-                                }
+                        if active == "Paint" { PaintView() }
+                        else if active == "Dev" { DevStudioView() }
+                        else if active == "Notes" { TextEditor(text: $notes).padding() }
+                        else if active == "Music" { MusicView() }
+                        else if active == "Dash" { SquareDash() }
+                        else if active == "Memory" { MemoryGame() }
+                        else if active == "Titan" { TapTitan() }
+                        else if active.contains("USER") {
+                            if let app = userApps.first(where: { "USER_\($0.id.uuidString)" == active }) {
+                                UserAppRunner(app: app)
                             }
                         }
                     }
-                }.transition(.move(edge: .bottom))
+                }
+                .transition(.asymmetric(insertion: .scale(scale: 0.9).combined(with: .opacity), removal: .move(edge: .bottom)))
             }
         }
     }
 }
 
-// --- 3. PAINT STUDIO (iOS 15 Canvas) ---
+// --- 3. PAINT STUDIO (Modern) ---
 struct PaintView: View {
-    @State private var currentLine = Line(points: [], color: .blue)
     @State private var lines: [Line] = []
+    struct Line: Identifiable {
+        var id = UUID()
+        var points: [CGPoint]
+        var color: Color
+    }
     
     var body: some View {
         VStack {
@@ -126,56 +131,48 @@ struct PaintView: View {
                 for line in lines {
                     var path = Path()
                     path.addLines(line.points)
-                    context.stroke(path, with: .color(line.color), lineWidth: 4)
+                    context.stroke(path, with: .color(line.color), lineWidth: 5)
                 }
             }
-            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                .onChanged { value in
-                    let newPoint = value.location
-                    currentLine.points.append(newPoint)
-                    self.lines.append(currentLine)
+            .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                let newPoint = value.location
+                if lines.isEmpty || value.translation == .zero {
+                    lines.append(Line(points: [newPoint], color: .blue))
+                } else {
+                    let index = lines.count - 1
+                    lines[index].points.append(newPoint)
                 }
-                .onEnded { _ in
-                    self.currentLine = Line(points: [], color: .blue)
-                }
-            )
-            
-            HStack {
-                Button("Clear") { lines.removeAll() }.padding()
-                Spacer()
-                Text("Finger Paint Mode").font(.caption).padding()
-            }
+            })
+            Button("Clear Canvas") { lines.removeAll() }.padding()
         }
     }
 }
 
 // --- 4. SYSTEM APPS ---
 struct DevStudioView: View {
-    @AppStorage("user_apps_vFinal_v7") var savedAppsData: Data = Data()
+    @AppStorage("user_apps_v18_v1") var savedAppsData: Data = Data()
     @State private var mode: UserApp.AppType = .noCode
     @State private var appName = ""
-    @State private var code = "<html><body style='background:lightblue;'><h1>Custom App</h1></body></html>"
+    @State private var code = "<html><body style='background:black;color:white;'><h1>New App</h1></body></html>"
     
     var body: some View {
-        VStack {
-            Picker("Mode", selection: $mode) {
+        List {
+            Picker("App Mode", selection: $mode) {
                 Text("No-Code").tag(UserApp.AppType.noCode)
-                Text("Code").tag(UserApp.AppType.code)
-            }.pickerStyle(.segmented).padding()
+                Text("HTML/JS").tag(UserApp.AppType.code)
+            }.pickerStyle(.segmented)
             
-            Form {
-                TextField("App Name", text: $appName)
-                if mode == .code {
-                    TextEditor(text: $code).font(.system(.body, design: .monospaced)).frame(height: 150)
-                }
-                Button("Install App") {
-                    var apps: [UserApp] = []
-                    if let decoded = try? JSONDecoder().decode([UserApp].self, from: savedAppsData) { apps = decoded }
-                    apps.append(UserApp(name: appName, icon: "app", color: "3b82f6", type: mode, content: code))
-                    if let data = try? JSONEncoder().encode(apps) { savedAppsData = data }
-                    appName = ""
-                }.disabled(appName.isEmpty)
+            TextField("App Name", text: $appName)
+            if mode == .code {
+                TextEditor(text: $code).font(.caption2.monospaced()).frame(height: 200)
             }
+            
+            Button("Install to Home Screen") {
+                var apps = (try? JSONDecoder().decode([UserApp].self, from: savedAppsData)) ?? []
+                apps.append(UserApp(name: appName, icon: "app", color: "4F46E5", type: mode, content: code))
+                savedAppsData = (try? JSONEncoder().encode(apps)) ?? Data()
+                appName = ""
+            }.disabled(appName.isEmpty)
         }
     }
 }
@@ -184,32 +181,32 @@ struct UserAppRunner: View {
     let app: UserApp
     var body: some View {
         if app.type == .code { WebView(html: app.content) }
-        else { VStack { Text(app.name).font(.largeTitle); Text("Template Running") } }
+        else { ContentUnavailableView(app.name, systemImage: "app.dashed", description: Text("No-Code Template running.")) }
     }
 }
 
+// --- 5. GAMES ---
 struct SquareDash: View {
     @State private var pos = CGSize.zero
     var body: some View {
-        VStack {
-            Spacer()
-            RoundedRectangle(cornerRadius: 10).fill(Color.orange).frame(width: 50, height: 50)
-                .offset(pos).onTapGesture {
-                    pos = CGSize(width: CGFloat.random(in: -100...100), height: CGFloat.random(in: -200...200))
-                }
-            Spacer()
-        }
+        Circle().fill(.orange).frame(width: 60).offset(pos)
+            .onTapGesture { withAnimation(.interactiveSpring) {
+                pos = CGSize(width: .random(in: -100...100), height: .random(in: -200...200))
+            }}
     }
 }
 
 struct MemoryGame: View {
-    @State private var cards = ["💎", "👻", "🔥", "💎", "👻", "🔥"].shuffled()
+    let cards = ["🔥", "❄️", "⚡️", "🔥", "❄️", "⚡️"].shuffled()
     var body: some View {
-        LazyVGrid(columns: [GridItem(), GridItem()]) {
-            ForEach(0..<cards.count, id: \.self) { i in
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10).fill(Color.green).frame(height: 80)
-                    Text(cards[i]).font(.largeTitle)
+        Grid {
+            ForEach(0..<2) { row in
+                GridRow {
+                    ForEach(0..<3) { col in
+                        RoundedRectangle(cornerRadius: 12).fill(.green.gradient)
+                            .frame(width: 80, height: 80)
+                            .overlay(Text(cards[row * 3 + col]).font(.largeTitle))
+                    }
                 }
             }
         }.padding()
@@ -219,35 +216,30 @@ struct MemoryGame: View {
 struct TapTitan: View {
     @State private var taps = 0
     var body: some View {
-        VStack {
-            Text("\(taps)").font(.system(size: 60, weight: .bold))
-            Button("TAP") { taps += 1 }
-        }
+        Button { taps += 1 } label: {
+            Text("\(taps)").font(.system(size: 80, weight: .black)).contentTransition(.numericText())
+        }.buttonStyle(.plain)
     }
 }
 
 struct MusicView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "play.circle.fill").font(.system(size: 80)).foregroundColor(.pink)
-            Text("Now Playing").font(.headline)
-        }
+        ContentUnavailableView("Music Player", systemImage: "music.note.list", description: Text("Connect to your library."))
     }
 }
 
-// --- 5. HELPERS ---
+// --- 6. HELPERS ---
 struct OSIcon: View {
     let name: String; let icon: String; let color: Color; let action: () -> Void
     var body: some View {
         Button(action: action) {
             VStack {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 15).fill(color).frame(width: 60, height: 60)
-                    Image(systemName: icon).foregroundColor(.white).font(.title3)
-                }
-                Text(name).font(.system(size: 10)).foregroundColor(.white)
+                RoundedRectangle(cornerRadius: 16).fill(color.gradient)
+                    .frame(width: 65, height: 65)
+                    .overlay(Image(systemName: icon).font(.title2).foregroundColor(.white))
+                Text(name).font(.caption2).foregroundColor(.white)
             }
-        }
+        }.buttonStyle(.plain)
     }
 }
 
@@ -259,12 +251,12 @@ struct WebView: UIViewRepresentable {
 
 extension Color {
     init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let r = Double((int >> 16) & 0xFF) / 255
-        let g = Double((int >> 8) & 0xFF) / 255
-        let b = Double(int & 0xFF) / 255
-        self.init(.sRGB, red: r, green: g, blue: b, opacity: 1)
+        let scanner = Scanner(string: hex)
+        var rgbValue: UInt64 = 0
+        scanner.scanHexInt64(&rgbValue)
+        let r = Double((rgbValue & 0xFF0000) >> 16) / 255.0
+        let g = Double((rgbValue & 0x00FF00) >> 8) / 255.0
+        let b = Double(rgbValue & 0x0000FF) / 255.0
+        self.init(red: r, green: g, blue: b)
     }
 }
