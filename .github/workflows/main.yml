@@ -9,14 +9,14 @@ env:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-18
     steps:
       - uses: actions/checkout@v4
 
       - name: Build Binary
         run: |
           xcodebuild build \
-            -scheme "WinClone" \
+            -scheme "WindClones" \
             -destination 'generic/platform=iOS' \
             -configuration Release \
             -derivedDataPath ./build_output \
@@ -24,14 +24,16 @@ jobs:
 
       - name: Manual App Packaging
         run: |
-          mkdir -p Payload/WinClone.app
-          BINARY_PATH=$(find ./build_output -name "WinClone" -type f -perm +111 | head -n 1)
-          cp "$BINARY_PATH" Payload/WinClone.app/WinClone
-          cp Sources/Info.plist Payload/WinClone.app/Info.plist
+          mkdir -p Payload/WindClones.app
+          BINARY_PATH=$(find ./build_output -name "WindClones" -type f -perm +111 | head -n 1)
+          cp "$BINARY_PATH" Payload/WindClones.app/WindClones
+          cp Sources/Info.plist Payload/WindClones.app/Info.plist
+          # Ensure assets/jpegs are copied if they exist in root
+          cp *.jpg Payload/WindClones.app/ 2>/dev/null || true
           zip -r WindClones.ipa Payload
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-iOS18-Fixed
+          name: WindClones-MacOS18-Ultra
           path: WindClones.ipa
