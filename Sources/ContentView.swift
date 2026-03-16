@@ -3,241 +3,220 @@ import PencilKit
 import PhotosUI
 
 // MARK: - Models
-struct StudioItem: Identifiable {
+struct MemelyItem: Identifiable {
     let id = UUID()
     var image: UIImage?
     var text: String = ""
     var isText: Bool = false
     var offset: CGSize = .zero
+    var lastOffset: CGSize = .zero
     var scale: CGFloat = 1.0
+    var lastScale: CGFloat = 1.0
+    var rotation: Angle = .zero
+    var lastRotation: Angle = .zero
     var zIndex: Double = 0
 }
 
 struct MemeTemplate: Identifiable {
     let id = UUID()
-    let name: String
     let fileName: String
 }
 
 // MARK: - Main Studio View
 struct ContentView: View {
-    // Canvas Engine
     @State private var canvasView = PKCanvasView()
     @State private var toolPicker = PKToolPicker()
-    
-    // Layers & Items
-    @State private var items: [StudioItem] = []
-    
-    // Selection & UI
-    @State private var selectedPickerItem: PhotosPickerItem?
+    @State private var layers: [MemelyItem] = []
     @State private var showTemplates = false
-    @State private var showTextInput = false
-    @State private var textBuffer = ""
-    
-    // Export State
-    @State private var exportedImage: Image?
-    @State private var isSharing = false
+    @State private var showTextEditor = false
+    @State private var textInput = ""
+    @State private var selectedPhoto: PhotosPickerItem?
 
-    // Offline Templates (Make sure these files exist in your project)
-    let templates = [
-        MemeTemplate(name: "Distracted BF", fileName: "distracted"),
-        MemeTemplate(name: "Drake No/Yes", fileName: "drake"),
-        MemeTemplate(name: "Two Buttons", fileName: "buttons"),
-        MemeTemplate(name: "Woman Yelling", fileName: "cat")
+    // Change these to match your .jpg filenames on GitHub
+    let preloadedImages = [
+        MemeTemplate(fileName: "temp1"),
+        MemeTemplate(fileName: "temp2"),
+        MemeTemplate(fileName: "temp3"),
+        MemeTemplate(fileName: "temp4")
     ]
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // MARK: - THE PAINTING SURFACE
-                ZStack {
-                    Color.white.ignoresSafeArea() // The Paper
-                    
-                    // All Images and Text Blocks
-                    ForEach($items) { $item in
-                        CanvasItemView(item: $item)
-                            .onTapGesture {
-                                // Bring tapped item to front
-                                item.zIndex = (items.map(\.zIndex).max() ?? 0) + 1
-                            }
+                // THE WORKSPACE
+                GeometryReader { geo in
+                    ZStack {
+                        Color.black.ignoresSafeArea()
+                        
+                        ForEach($layers) { $layer in
+                            LayerElement(item: $layer)
+                                .onTapGesture {
+                                    layer.zIndex = (layers.map(\.zIndex).max() ?? 0) + 1
+                                }
+                        }
+                        
+                        PKCanvasRepresentable(canvas: $canvasView, picker: $toolPicker)
                     }
-                    
-                    // The PencilKit Drawing Layer
-                    CanvasRepresentable(canvas: $canvasView, picker: $toolPicker)
+                    .frame(width: geo.size.width, height: geo.size.height)
                 }
                 .clipped()
-                .background(Color(UIColor.secondarySystemBackground))
                 
-                // MARK: - PRO TOOLBAR
+                // TOOLBAR
                 HStack(spacing: 25) {
-                    // 1. Templates
                     Button { showTemplates = true } label: {
-                        ToolButton(icon: "rectangle.stack.badge.plus", label: "Template")
+                        Image(systemName: "rectangle.grid.2x2.fill").font(.title2)
                     }
                     
-                    // 2. Add Photos
-                    PhotosPicker(selection: $selectedPickerItem, matching: .images) {
-                        ToolButton(icon: "photo.badge.plus", label: "Image")
+                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                        Image(systemName: "plus.rectangle.on.rectangle.fill").font(.title2)
                     }
                     
-                    // 3. Add Meme Text
-                    Button { showTextInput = true } label: {
-                        ToolButton(icon: "textformat.size", label: "Text")
+                    Button { showTextEditor = true } label: {
+                        Image(systemName: "text.bubble.fill").font(.title2)
                     }
                     
-                    // 4. Save to Photos (OFFLINE DOWNLOAD)
+                    Spacer()
+                    
                     Button(action: saveToGallery) {
-                        ToolButton(icon: "arrow.down.to.line.circle.fill", label: "Save")
-                            .foregroundStyle(.blue)
+                        Image(systemName: "arrow.down.circle.fill").font(.system(size: 35)).foregroundStyle(.blue)
                     }
                     
-                    // 5. Clear All
                     Button(role: .destructive) {
-                        items.removeAll()
+                        layers.removeAll()
                         canvasView.drawing = PKDrawing()
                     } label: {
-                        ToolButton(icon: "trash", label: "Clear")
-                            .foregroundStyle(.red)
+                        Image(systemName: "trash.fill").font(.title2)
                     }
                 }
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity)
+                .padding()
                 .background(.ultraThinMaterial)
             }
-            .navigationTitle("Meme Studio Pro")
+            .navigationTitle("Memely")
             .navigationBarTitleDisplayMode(.inline)
-            // MARK: - MODALS & ALERTS
             .sheet(isPresented: $showTemplates) {
-                TemplatePicker(templates: templates) { selected in
-                    addOfflineTemplate(selected)
+                TemplateGrid(templates: preloadedImages) { selected in
+                    addLayer(from: selected.fileName)
                 }
             }
-            .alert("Add Text", isPresented: $showTextInput) {
-                TextField("Enter meme caption...", text: $textBuffer)
+            .alert("Meme Text", isPresented: $showTextEditor) {
+                TextField("Type here...", text: $textInput)
                 Button("Add") {
-                    items.append(StudioItem(text: textBuffer, isText: true, zIndex: Double(items.count)))
-                    textBuffer = ""
+                    layers.append(MemelyItem(text: textInput, isText: true, zIndex: Double(layers.count)))
+                    textInput = ""
                 }
-                Button("Cancel", role: .cancel) { textBuffer = "" }
+                Button("Cancel", role: .cancel) {}
             }
-            .onChange(of: selectedPickerItem) { _, newItem in
+            .onChange(of: selectedPhoto) { _, newItem in
                 Task {
                     if let data = try? await newItem?.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: data) {
-                        items.append(StudioItem(image: uiImage, zIndex: Double(items.count)))
+                        layers.append(MemelyItem(image: uiImage, zIndex: Double(layers.count)))
                     }
                 }
             }
         }
     }
 
-    // MARK: - Logic
-    func addOfflineTemplate(_ template: MemeTemplate) {
-        // Look for image in the App Bundle (Offline)
-        if let path = Bundle.main.path(forResource: template.fileName, ofType: "jpg") ?? 
-                      Bundle.main.path(forResource: template.fileName, ofType: "png"),
-           let uiImage = UIImage(contentsOfFile: path) {
-            items.insert(StudioItem(image: uiImage, zIndex: -1), at: 0)
+    func addLayer(from fileName: String) {
+        // Updated logic to specifically check for .jpg first
+        if let path = Bundle.main.path(forResource: fileName, ofType: "jpg") ?? 
+                      Bundle.main.path(forResource: fileName, ofType: "jpeg") ??
+                      Bundle.main.path(forResource: fileName, ofType: "png"),
+           let img = UIImage(contentsOfFile: path) {
+            layers.append(MemelyItem(image: img, zIndex: Double(layers.count)))
         }
         showTemplates = false
     }
 
     @MainActor
     func saveToGallery() {
-        // Render the view to a UIImage
-        let renderer = ImageRenderer(content: body) 
-        renderer.scale = 3.0 // High Resolution
-        
+        let renderer = ImageRenderer(content: body)
+        renderer.scale = 3.0
         if let uiImage = renderer.uiImage {
-            // Save directly to Camera Roll
             UIImageWriteToSavedPhotosAlbum(uiImage, nil, nil, nil)
-            
-            // Haptic Feedback
-            let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.success)
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         }
     }
 }
 
-// MARK: - Helper Views
-struct ToolButton: View {
-    let icon: String
-    let label: String
-    var body: some View {
-        VStack {
-            Image(systemName: icon).font(.title2)
-            Text(label).font(.caption2)
-        }
-    }
-}
-
-struct CanvasItemView: View {
-    @Binding var item: StudioItem
-    @GestureState private var tempScale: CGFloat = 1.0
-    @GestureState private var tempOffset: CGSize = .zero
-
+// MARK: - Layer Element (Movement/Collage Logic)
+struct LayerElement: View {
+    @Binding var item: MemelyItem
+    
     var body: some View {
         Group {
             if item.isText {
                 Text(item.text)
-                    .font(.system(size: 40, weight: .black, design: .rounded))
+                    .font(.system(size: 50, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
-                    .shadow(color: .black, radius: 1)
-                    .shadow(color: .black, radius: 1)
-                    .shadow(color: .black, radius: 3) // Thick meme outline
+                    .shadow(color: .black, radius: 2)
+                    .shadow(color: .black, radius: 2)
+                    .multilineTextAlignment(.center)
             } else if let img = item.image {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 250)
+                    .frame(width: 300)
             }
         }
-        .scaleEffect(item.scale * tempScale)
-        .offset(x: item.offset.width + tempOffset.width, y: item.offset.height + tempOffset.height)
+        .rotationEffect(item.rotation)
+        .scaleEffect(item.scale)
+        .offset(item.offset)
         .zIndex(item.zIndex)
         .gesture(
             DragGesture()
-                .updating($tempOffset) { value, state, _ in state = value.translation }
-                .onEnded { value in item.offset.width += value.translation.width; item.offset.height += value.translation.height }
+                .onChanged { value in
+                    item.offset = CGSize(
+                        width: item.lastOffset.width + value.translation.width,
+                        height: item.lastOffset.height + value.translation.height
+                    )
+                }
+                .onEnded { _ in item.lastOffset = item.offset }
         )
         .gesture(
-            MagnificationGesture()
-                .updating($tempScale) { value, state, _ in state = value }
-                .onEnded { value in item.scale *= value }
+            SimultaneousGesture(
+                MagnificationGesture()
+                    .onChanged { value in item.scale = item.lastScale * value }
+                    .onEnded { _ in item.lastScale = item.scale },
+                RotationGesture()
+                    .onChanged { value in item.rotation = item.lastRotation + value }
+                    .onEnded { _ in item.lastRotation = item.rotation }
+            )
         )
     }
 }
 
-struct TemplatePicker: View {
+struct TemplateGrid: View {
     let templates: [MemeTemplate]
-    let onSelect: (MemeTemplate) -> Void
+    var onSelect: (MemeTemplate) -> Void
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150))]) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
                     ForEach(templates) { t in
-                        Button(action: { onSelect(t) }) {
-                            VStack {
-                                RoundedRectangle(cornerRadius: 10).fill(.gray.opacity(0.2))
-                                    .aspectRatio(1, contentMode: .fit)
-                                    .overlay(Image(systemName: "photo"))
-                                Text(t.name).font(.caption).foregroundStyle(.primary)
+                        Button { onSelect(t) } label: {
+                            if let path = Bundle.main.path(forResource: t.fileName, ofType: "jpg") ?? Bundle.main.path(forResource: t.fileName, ofType: "jpeg"),
+                               let img = UIImage(contentsOfFile: path) {
+                                Image(uiImage: img).resizable().aspectRatio(contentMode: .fill).frame(height: 150).cornerRadius(12).clipped()
+                            } else {
+                                RoundedRectangle(cornerRadius: 12).fill(.gray).frame(height: 150).overlay(Text("Missing File").font(.caption))
                             }
                         }
                     }
                 }
                 .padding()
             }
-            .navigationTitle("Templates")
+            .navigationTitle("Template Gallery")
         }
     }
 }
 
-struct CanvasRepresentable: UIViewRepresentable {
+struct PKCanvasRepresentable: UIViewRepresentable {
     @Binding var canvas: PKCanvasView
     @Binding var picker: PKToolPicker
     func makeUIView(context: Context) -> PKCanvasView {
         canvas.backgroundColor = .clear
+        canvas.isOpaque = false
         canvas.drawingPolicy = .anyInput
         picker.addObserver(canvas)
         picker.setVisible(true, forFirstResponder: canvas)
