@@ -2,14 +2,15 @@ import SwiftUI
 import PencilKit
 import PhotosUI
 
-// MARK: - Layer Model
-struct MemelyLayer: Identifiable {
+// MARK: - Advanced Layer Model
+struct WindLayer: Identifiable {
     let id = UUID()
     var image: UIImage?
     var text: String = ""
     var isText: Bool = false
+    var fontName: String = "Impact" // Default Meme Font
     
-    // Persistent States
+    // Persistent Transformation
     var offset: CGSize = .zero
     var scale: CGFloat = 1.0
     var rotation: Angle = .zero
@@ -17,18 +18,19 @@ struct MemelyLayer: Identifiable {
 }
 
 struct ContentView: View {
-    @State private var layers: [MemelyLayer] = []
+    @State private var layers: [WindLayer] = []
     @State private var canvasView = PKCanvasView()
     @State private var toolPicker = PKToolPicker()
     
-    // Control States
+    // UI Logic
     @State private var isDrawingMode = false
     @State private var showTemplates = false
-    @State private var showTextAlert = false
+    @State private var showTextEditor = false
     @State private var textInput = ""
+    @State private var selectedFont = "Impact"
     @State private var photoSelection: PhotosPickerItem?
 
-    // Update these strings to match your .jpg filenames in your repo
+    let availableFonts = ["Impact", "Helvetica-Bold", "Marker Felt", "Courier-Bold", "Futura-CondensedExtraBold"]
     let templateFiles = ["temp1", "temp2", "temp3", "temp4", "temp5"]
 
     var body: some View {
@@ -38,125 +40,128 @@ struct ContentView: View {
                 ZStack {
                     Color.white.ignoresSafeArea()
                     
-                    // 1. Collage/Image/Text Layers
+                    // The drawing layer (Background or Foreground based on toggle)
+                    CanvasProvider(canvasView: $canvasView, toolPicker: $toolPicker, isActive: isDrawingMode)
+                        .zIndex(isDrawingMode ? 1000 : 0)
+                        .allowsHitTesting(isDrawingMode)
+                    
                     ForEach($layers) { $layer in
-                        MemelyComponent(item: $layer)
+                        WindElement(item: $layer)
                             .zIndex(layer.zIndex)
                             .onTapGesture {
-                                // Bring tapped item to the absolute front
                                 layer.zIndex = (layers.map(\.zIndex).max() ?? 0) + 1
                             }
                     }
-                    
-                    // 2. Painting Layer
-                    CanvasRepresentable(canvasView: $canvasView, toolPicker: $toolPicker, isActive: isDrawingMode)
-                        .allowsHitTesting(isDrawingMode)
-                        .zIndex(999) // Always on top, but pass-through when inactive
                 }
                 .clipped()
                 
-                // MARK: - TOOLBAR
-                VStack(spacing: 12) {
-                    // Mode Toggle (Essential for offline collaging)
-                    Picker("Control Mode", selection: $isDrawingMode) {
-                        Label("Move & Scale", systemImage: "hand.tap.fill").tag(false)
-                        Label("Draw", systemImage: "pencil.tip.crop.circle.fill").tag(true)
+                // MARK: - CRAZY GOOD TOOLBAR
+                VStack(spacing: 10) {
+                    Picker("Mode", selection: $isDrawingMode) {
+                        Image(systemName: "hand.draw").tag(true)
+                        Image(systemName: "arrow.up.and.down.and.arrow.left.and.right").tag(false)
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal)
 
-                    HStack(spacing: 25) {
-                        // Template Gallery
+                    HStack(spacing: 20) {
                         Button { showTemplates = true } label: {
-                            VStack { Image(systemName: "photo.on.rectangle.angled"); Text("Temps").font(.caption2) }
+                            ToolbarIcon(icon: "photo.on.rectangle.angled", label: "Gallery")
                         }
                         
-                        // Image Overlay (The Collage Adder)
                         PhotosPicker(selection: $photoSelection, matching: .images) {
-                            VStack { Image(systemName: "plus.viewfinder"); Text("Overlay").font(.caption2) }
+                            ToolbarIcon(icon: "plus.viewfinder", label: "Overlay")
                         }
                         
-                        // Text Overlay
-                        Button { showTextAlert = true } label: {
-                            VStack { Image(systemName: "textformat.size"); Text("Text").font(.caption2) }
+                        Button { showTextEditor = true } label: {
+                            ToolbarIcon(icon: "textformat", label: "Text")
                         }
                         
                         Spacer()
                         
-                        // SAVE TO PHOTOS
-                        Button(action: saveMeme) {
+                        Button(action: exportToLibrary) {
                             Image(systemName: "arrow.down.circle.fill")
-                                .font(.system(size: 38))
+                                .font(.system(size: 40))
                                 .foregroundStyle(.blue)
                         }
                     }
-                    .padding(.horizontal, 25)
-                    .padding(.bottom, 15)
+                    .padding(.horizontal)
+                    .padding(.bottom, 20)
                 }
                 .background(.ultraThinMaterial)
             }
-            .navigationTitle("Memely")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("WindClones Pro")
             .sheet(isPresented: $showTemplates) {
-                TemplateBrowser(files: templateFiles) { name in
-                    addTemplate(name)
+                TemplateGallery(files: templateFiles) { name in
+                    loadTemplate(name)
+                    showTemplates = false
                 }
             }
-            .alert("Add Meme Text", isPresented: $showTextAlert) {
-                TextField("Enter caption...", text: $textInput)
-                Button("Add") {
-                    layers.append(MemelyLayer(text: textInput, isText: true, zIndex: Double(layers.count)))
-                    textInput = ""
+            .sheet(isPresented: $showTextEditor) {
+                VStack(spacing: 20) {
+                    Text("Meme Text Designer").font(.headline)
+                    TextField("Enter text...", text: $textInput)
+                        .textFieldStyle(.roundedBorder).padding()
+                    
+                    Picker("Font", selection: $selectedFont) {
+                        ForEach(availableFonts, id: \.self) { Text($0) }
+                    }
+                    .pickerStyle(.wheel)
+                    
+                    Button("Add to Studio") {
+                        layers.append(WindLayer(text: textInput, isText: true, fontName: selectedFont, zIndex: Double(layers.count)))
+                        textInput = ""
+                        showTextEditor = false
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                Button("Cancel", role: .cancel) {}
+                .presentationDetents([.medium])
             }
             .onChange(of: photoSelection) { _, newValue in
                 Task {
                     if let data = try? await newValue?.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: data) {
-                        layers.append(MemelyLayer(image: uiImage, zIndex: Double(layers.count)))
+                        layers.append(WindLayer(image: uiImage, zIndex: Double(layers.count)))
                     }
                 }
             }
         }
     }
 
-    func addTemplate(_ name: String) {
-        if let path = Bundle.main.path(forResource: name, ofType: "jpg"),
+    func loadTemplate(_ name: String) {
+        if let path = Bundle.main.path(forResource: name, ofType: "jpg") ?? Bundle.main.path(forResource: name, ofType: "png"),
            let img = UIImage(contentsOfFile: path) {
-            // Adds as a background layer
-            layers.insert(MemelyLayer(image: img, zIndex: -1), at: 0)
+            layers.insert(WindLayer(image: img, zIndex: -1), at: 0)
         }
-        showTemplates = false
     }
 
     @MainActor
-    func saveMeme() {
-        let renderer = ImageRenderer(content: body)
-        renderer.scale = 3.0
-        if let uiImage = renderer.uiImage {
-            UIImageWriteToSavedPhotosAlbum(uiImage, nil, nil, nil)
+    func exportToLibrary() {
+        // Create a dedicated view for rendering to avoid UI artifacts
+        let renderer = ImageRenderer(content: body) 
+        renderer.scale = UIScreen.main.scale * 2
+        if let image = renderer.uiImage {
+            UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
     }
 }
 
-// MARK: - Persistent Gesture Component
-struct MemelyComponent: View {
-    @Binding var item: MemelyLayer
-    
-    // Current gesture states
-    @State private var currentOffset: CGSize = .zero
-    @State private var currentScale: CGFloat = 1.0
-    @State private var currentRotation: Angle = .zero
-    
+// MARK: - Smooth Gesture Engine
+struct WindElement: View {
+    @Binding var item: WindLayer
+    @State private var dOffset: CGSize = .zero
+    @State private var dScale: CGFloat = 1.0
+    @State private var dRotation: Angle = .zero
+
     var body: some View {
         Group {
             if item.isText {
                 Text(item.text)
-                    .font(.system(size: 45, weight: .black, design: .rounded))
+                    .font(.custom(item.fontName, size: 50))
                     .foregroundStyle(.white)
-                    .shadow(color: .black, radius: 4)
+                    .shadow(color: .black, radius: 2)
+                    .shadow(color: .black, radius: 5)
                     .multilineTextAlignment(.center)
             } else if let img = item.image {
                 Image(uiImage: img)
@@ -165,63 +170,75 @@ struct MemelyComponent: View {
                     .frame(width: 250)
             }
         }
-        .offset(x: item.offset.width + currentOffset.width, 
-                y: item.offset.height + currentOffset.height)
-        .scaleEffect(item.scale * currentScale)
-        .rotationEffect(item.rotation + currentRotation)
+        .offset(x: item.offset.width + dOffset.width, y: item.offset.height + dOffset.height)
+        .scaleEffect(item.scale * dScale)
+        .rotationEffect(item.rotation + dRotation)
         .gesture(
             DragGesture()
-                .onChanged { currentOffset = $0.translation }
+                .onChanged { dOffset = $0.translation }
                 .onEnded { value in
                     item.offset.width += value.translation.width
                     item.offset.height += value.translation.height
-                    currentOffset = .zero
+                    dOffset = .zero
                 }
         )
         .gesture(
             SimultaneousGesture(
                 MagnificationGesture()
-                    .onChanged { currentScale = $0 }
-                    .onEnded { value in
-                        item.scale *= value
-                        currentScale = 1.0
-                    },
+                    .onChanged { dScale = $0 }
+                    .onEnded { item.scale *= $0; dScale = 1.0 },
                 RotationGesture()
-                    .onChanged { currentRotation = $0 }
-                    .onEnded { value in
-                        item.rotation += value
-                        currentRotation = .zero
-                    }
+                    .onChanged { dRotation = $0 }
+                    .onEnded { item.rotation += $0; dRotation = .zero }
             )
         )
     }
 }
 
-// MARK: - Template Picker
-struct TemplateBrowser: View {
+// MARK: - Fixed Gallery with Previews
+struct TemplateGallery: View {
     let files: [String]
     var onSelect: (String) -> Void
     var body: some View {
         NavigationStack {
-            List(files, id: \.self) { file in
-                Button { onSelect(file) } label: {
-                    HStack {
-                        Image(systemName: "photo.fill")
-                        Text(file)
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
+                    ForEach(files, id: \.self) { file in
+                        Button { onSelect(file) } label: {
+                            VStack {
+                                if let path = Bundle.main.path(forResource: file, ofType: "jpg"),
+                                   let uiImage = UIImage(contentsOfFile: path) {
+                                    Image(uiImage: uiImage)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(height: 120).cornerRadius(10).clipped()
+                                } else {
+                                    RoundedRectangle(cornerRadius: 10).fill(.gray.opacity(0.3)).frame(height: 120)
+                                }
+                                Text(file).font(.caption).foregroundStyle(.primary)
+                            }
+                        }
                     }
                 }
+                .padding()
             }
-            .navigationTitle("Select Background")
+            .navigationTitle("Template Gallery")
         }
     }
 }
 
-// MARK: - PencilKit Wrap
-struct CanvasRepresentable: UIViewRepresentable {
+struct ToolbarIcon: View {
+    let icon: String
+    let label: String
+    var body: some View {
+        VStack { Image(systemName: icon).font(.title3); Text(label).font(.caption2) }
+    }
+}
+
+struct CanvasProvider: UIViewRepresentable {
     @Binding var canvasView: PKCanvasView
     @Binding var toolPicker: PKToolPicker
     var isActive: Bool
-    
     func makeUIView(context: Context) -> PKCanvasView {
         canvasView.backgroundColor = .clear
         canvasView.isOpaque = false
@@ -230,7 +247,6 @@ struct CanvasRepresentable: UIViewRepresentable {
         toolPicker.setVisible(isActive, forFirstResponder: canvasView)
         return canvasView
     }
-    
     func updateUIView(_ uiView: PKCanvasView, context: Context) {
         toolPicker.setVisible(isActive, forFirstResponder: uiView)
         if isActive { uiView.becomeFirstResponder() }
