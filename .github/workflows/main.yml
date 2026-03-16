@@ -1,4 +1,4 @@
-name: Build WindClones
+name: Build Memely
 on:
   push:
     branches: ["main"]
@@ -16,7 +16,7 @@ jobs:
       - name: Build Binary
         run: |
           xcodebuild build \
-            -scheme "WinClone" \
+            -scheme "Memely" \
             -destination 'generic/platform=iOS' \
             -configuration Release \
             -derivedDataPath ./build_output \
@@ -24,14 +24,14 @@ jobs:
 
       - name: Manual App Packaging
         run: |
-          mkdir -p Payload/WinClone.app
-          BINARY_PATH=$(find ./build_output -name "WinClone" -type f -perm +111 | head -n 1)
-          cp "$BINARY_PATH" Payload/WinClone.app/WinClone
-          cp Sources/Info.plist Payload/WinClone.app/Info.plist
-          zip -r WindClones.ipa Payload
+          mkdir -p Payload/Memely.app
+          BINARY_PATH=$(find ./build_output -name "Memely" -type f -perm +111 | head -n 1)
+          cp "$BINARY_PATH" Payload/Memely.app/Memely
+          cp Sources/Info.plist Payload/Memely.app/Info.plist
+          zip -r Memely.ipa Payload
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WindClones-iOS18-Fixed
-          path: WindClones.ipa
+          name: Memely-iOS18
+          path: Memely.ipa
