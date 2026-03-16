@@ -4,6 +4,9 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: macos-15
@@ -21,18 +24,10 @@ jobs:
 
       - name: Manual App Packaging
         run: |
-          # 1. Create the .app folder structure
           mkdir -p Payload/WinClone.app
-          
-          # 2. Find the actual binary executable
           BINARY_PATH=$(find ./build_output -name "WinClone" -type f -perm +111 | head -n 1)
-          echo "Found binary at: $BINARY_PATH"
-          
-          # 3. Copy binary and Info.plist into the app folder
           cp "$BINARY_PATH" Payload/WinClone.app/WinClone
           cp Sources/Info.plist Payload/WinClone.app/Info.plist
-          
-          # 4. Finalize IPA
           zip -r WindClones.ipa Payload
 
       - name: Upload Artifact
